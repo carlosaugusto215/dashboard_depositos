@@ -980,9 +980,7 @@ const YPS=20;
 
 function renderYKPIs(){
   const a=document.getElementById('g-an').value;
-  const _dia=gDia();
   let data=a?YC.filter(c=>c.analista===a):YC;
-  if(_dia!==null && _dia!==8) data=[];  // ativos ontem = dia 8 only
   const total=data.reduce((s,c)=>s+c.total_dia,0);
   const totalLTV=data.reduce((s,c)=>s+c.ltv,0);
   const byAn={};data.forEach(c=>{byAn[c.analista]=(byAn[c.analista]||0)+c.total_dia;});
