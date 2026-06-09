@@ -1685,13 +1685,79 @@ function importXL(ev){
       JD=maxDayNum;
       DD=fd(yest);
 
+      // Busca coluna por padrão prioritário: testa cada needle em ordem, retorna 1º match
+      const fPri=(ks,...ns)=>{for(const n of ns){const r=ks.find(k=>k.toLowerCase().replace(/ê/g,'e').replace(/\s/g,'').includes(n.toLowerCase().replace(/ê/g,'e').replace(/\s/g,'')));if(r)return r;}return null;};
+
+      // Cross-ref: total depositado por (external_id, dia)
+      const depByIdDay={};
+      rows.forEach(r=>{const d=r.date.getDate(),id=r.id;if(!depByIdDay[id])depByIdDay[id]={};depByIdDay[id][d]=(depByIdDay[id][d]||0)+r.val;});
+
+      // YC: clientes com depósito em D-1
+      {const ycMap={};
+      rows.filter(r=>r.date.getDate()===maxDayNum&&r.date.getMonth()+1===MM&&r.date.getFullYear()===MY).forEach(r=>{if(!ycMap[r.id])ycMap[r.id]={analista:r.resp,total_dia:0,qtd_dep:0};ycMap[r.id].total_dia+=r.val;ycMap[r.id].qtd_dep++;});
+      YC=Object.entries(ycMap).map(([id,v])=>({external_id:id,analista:v.analista,classificacao:'VIP',total_dia:Math.round(v.total_dia*100)/100,qtd_dep:v.qtd_dep,ltv:Math.round((ltvM[id]||0)*100)/100}));}
+
+      // SK: Saques
+      const wsSkName=wb.SheetNames.find(n=>n.toLowerCase().includes('saque'));
+      if(wsSkName){const rawSk=XLSX.utils.sheet_to_json(wb.Sheets[wsSkName],{raw:true,defval:null});
+        if(rawSk.length){const ks=Object.keys(rawSk[0]);
+          const[skId,skV,skDia,skMes,skAn,skCnt]=[fPri(ks,'external_id','id'),fPri(ks,'saque total','saquetotal'),fPri(ks,'dia','day'),fPri(ks,'mês','mes','month'),fPri(ks,'responsav','analista','gerente'),fPri(ks,'count_withdrawal','count','qtd')];
+          if(skId&&skV&&skDia&&skAn){const skMap={};
+            rawSk.forEach(r=>{const id=String(r[skId]||'').trim(),d=parseInt(r[skDia]),val=parseFloat(String(r[skV]||'0').replace(',','.'));if(!id||isNaN(d)||isNaN(val))return;
+              const an=String(r[skAn]||'').trim(),mes=skMes?parseInt(r[skMes]):MM,cnt=skCnt?parseInt(r[skCnt]||1):1;
+              const key=id+'|'+d;if(!skMap[key])skMap[key]={external_id:id,dia:d,mes,analista:an,valor:0,count_saque:0};
+              skMap[key].valor+=val;skMap[key].count_saque+=cnt;});
+            SK=Object.values(skMap).map(s=>{const dep=depByIdDay[s.external_id]?.[s.dia]||0;
+              return{...s,valor:Math.round(s.valor*100)/100,dep_dia:Math.round(dep*100)/100,date:String(s.dia).padStart(2,'0')+'/'+String(s.mes).padStart(2,'0')+'/'+MY,destaque:s.valor>50000,dep_maior:dep>s.valor};});}}}
+
+      // CB: CashBack
+      const wsCbName=wb.SheetNames.find(n=>n.toLowerCase().includes('cash'));
+      if(wsCbName){const rawCb=XLSX.utils.sheet_to_json(wb.Sheets[wsCbName],{raw:true,defval:null});
+        if(rawCb.length){const ks=Object.keys(rawCb[0]);
+          const[cbId,cbV,cbDia,cbMes,cbAn]=[fPri(ks,'external_id','id'),fPri(ks,'cashback'),fPri(ks,'dia','day'),fPri(ks,'mês','mes','month'),fPri(ks,'responsav','analista','vip','gerente')];
+          const fxa=v=>v>=1000?'+1k':v>=500?'500–1k':v>=100?'100–500':v>=50?'50–100':v>=10?'10–50':'0–10';
+          if(cbId&&cbV&&cbAn){CB=rawCb.map(r=>{const id=String(r[cbId]||'').trim(),val=parseFloat(String(r[cbV]||'0').replace(',','.'));
+            const an=String(r[cbAn]||'').trim(),d=cbDia?parseInt(r[cbDia]):maxDayNum,mes=cbMes?parseInt(r[cbMes]):MM;
+            const dep=depByIdDay[id]?.[d]||0;
+            return{external_id:id,cashback:Math.round(val*100)/100,dep_dia:Math.round(dep*100)/100,ltv:Math.round((ltvM[id]||0)*100)/100,dia:d,mes,analista:an,faixa:fxa(val)};
+          }).filter(r=>r.external_id&&!isNaN(r.cashback));}}}
+
+      // CH: Chamados
+      const wsChName=wb.SheetNames.find(n=>n.toLowerCase().includes('chamado')||n.toLowerCase().includes('ticket'));
+      if(wsChName){const rawCh=XLSX.utils.sheet_to_json(wb.Sheets[wsChName],{raw:true,defval:null});
+        if(rawCh.length){const ks=Object.keys(rawCh[0]);
+          const[chCli,chTkt,chMot,chDia,chGer]=[fPri(ks,'id externa','solicitante','external','cliente'),fPri(ks,'id do ticket','ticket'),fPri(ks,'motivo'),fPri(ks,'dia','day'),fPri(ks,'gerente','responsav','analista')];
+          if(chCli&&chTkt&&chMot&&chDia&&chGer){CH=rawCh.map(r=>({
+            cliente_id:String(r[chCli]||'').trim(),ticket_id:String(r[chTkt]||'').trim(),
+            motivo:String(r[chMot]||'').trim(),dia:parseInt(r[chDia]),gerente:String(r[chGer]||'').trim()
+          })).filter(r=>r.cliente_id&&r.ticket_id&&!isNaN(r.dia));}}}
+
+      // TN: Torneios
+      const wsTnName=wb.SheetNames.find(n=>n.toLowerCase().includes('torneio'));
+      if(wsTnName){const rawTn=XLSX.utils.sheet_to_json(wb.Sheets[wsTnName],{raw:true,defval:null});
+        if(rawTn.length){const ks=Object.keys(rawTn[0]);
+          const[tnId,tnSc,tnTr,tnAn]=[fPri(ks,'user_ext_id','external_id','id'),fPri(ks,'score','scores','pontos'),fPri(ks,'torneio','tournament'),fPri(ks,'vip','responsav','analista','gerente')];
+          if(tnId&&tnSc&&tnTr&&tnAn){const byTr={};
+            rawTn.forEach(r=>{const tr=String(r[tnTr]||'').trim(),id=String(r[tnId]||'').trim(),an=String(r[tnAn]||'').trim(),sc=parseInt(r[tnSc]||0);
+              if(!tr||!id)return;if(!byTr[tr])byTr[tr]=[];byTr[tr].push({external_id:id,score:sc,torneio:tr,analista:an,ativo:true});});
+            const nTN=[];Object.values(byTr).forEach(arr=>{arr.sort((a,b)=>b.score-a.score);arr.forEach((item,i)=>{item.posicao=i+1;nTN.push(item);});});TN=nTN;}}}
+
+      // GP: Grandes Perdas = join SK × dep (dep_dia já calculado no SK)
+      GP=SK.map(sk=>({external_id:sk.external_id,dia:sk.dia,dep:sk.dep_dia,saque:sk.valor,net:Math.round((sk.dep_dia-sk.valor)*100)/100,analista:sk.analista,ltv:Math.round((ltvM[sk.external_id]||0)*100)/100})).sort((a,b)=>a.net-b.net);
+
+      // AN_NET: dep − saque por analista por dia
+      const nAN_NET={};
+      Object.entries(nAN_DEP).forEach(([an,days])=>{if(!nAN_NET[an])nAN_NET[an]={};Object.entries(days).forEach(([d,v])=>{nAN_NET[an][d]=(nAN_NET[an][d]||0)+v;});});
+      SK.forEach(sk=>{const an=sk.analista,d=String(sk.dia);if(!nAN_NET[an])nAN_NET[an]={};nAN_NET[an][d]=(nAN_NET[an][d]||0)-sk.valor;});
+      AN_NET=nAN_NET;
+
       // Reconstrói selects de analista e período
       const selAn=document.getElementById('g-an');
       selAn.innerHTML='<option value="">Todos os Analistas</option>'+AL.map(a=>`<option>${a}</option>`).join('');
       updateDaySelects(maxDayNum, MM);
 
       applyF();
-      st.textContent='✓ '+newCL.length+' clientes · Dados: '+DD;
+      st.textContent='✓ '+newCL.length+' clientes · '+SK.length+' saques · '+CB.length+' cashbacks · '+CH.length+' chamados · Dados: '+DD;
       st.className='imp-st ok';
       ev.target.value='';
     }catch(err){st.textContent='Erro: '+err.message;st.className='imp-st er';console.error(err);}
