@@ -1596,6 +1596,7 @@ function updateDaySelects(maxDay, mm) {
 function limparAcc(){
   if(!confirm('Limpar todo o histórico acumulado? Os dados voltarão ao estado hardcoded.'))return;
   ['deps','sk','cb','ch','prev_deps','prev_sk','prev_cb','prev_ch'].forEach(k=>localStorage.removeItem('dep_acc_'+k));
+  localStorage.removeItem('dep_acc_cliM');
   localStorage.removeItem('dep_acc_month');
   document.getElementById('imp-st').textContent='Acumulado limpo.';
 }
@@ -1661,6 +1662,7 @@ function importXL(ev){
           if(v)localStorage.setItem('dep_acc_prev_'+k,v);
           localStorage.removeItem('dep_acc_'+k);
         });
+        localStorage.removeItem('dep_acc_cliM');
         localStorage.setItem('dep_acc_month',mKey);
       }
 
@@ -1679,27 +1681,51 @@ function importXL(ev){
 
       const rC=allRowsCur.filter(r=>r.date>=new Date(MY,MM-1,1)&&r.date<today);
       const rP=allRowsPrev.filter(r=>r.date.getFullYear()===PY&&r.date.getMonth()+1===PM);
-      const ltvM={};[...allRowsCur,...allRowsPrev].forEach(r=>{ltvM[r.id]=(ltvM[r.id]||0)+r.val;});
+
+      // Linhas sintéticas do AN_DEP para dias ainda não acumulados em raw — preserva histórico hardcoded
+      const accDiasSet=new Set(freshDeps.map(r=>r.dia));
+      const synRows=[];
+      if(typeof AN_DEP==='object'){Object.entries(AN_DEP).forEach(([an,days])=>{Object.entries(days).forEach(([d,total])=>{if(!accDiasSet.has(parseInt(d)))synRows.push({id:'__s_'+an+'_'+d,date:new Date(MY,MM-1,parseInt(d)),val:total,resp:an});});});}
+      const rC_KPI=[...rC,...synRows]; // KPI/gráficos: inclui dias históricos do hardcoded
+
+      // ltvM: seed do hardcoded CL/YC para preservar LTV histórico
+      const ltvM={};
+      if(typeof CL!=='undefined')CL.forEach(c=>{ltvM[c.external_id]=c.ltv||0;});
+      if(typeof YC!=='undefined')YC.forEach(c=>{if(ltvM[c.external_id]==null)ltvM[c.external_id]=c.ltv||0;});
+
+      // CL: blend — carrega estado salvo ou semeia do hardcoded CL + YC no primeiro import
+      let accCliM=JSON.parse(localStorage.getItem('dep_acc_cliM')||'null');
+      if(!accCliM){
+        accCliM={};
+        if(typeof CL!=='undefined')CL.forEach(c=>{const p=c.ultimo_dep.split('/');accCliM[c.external_id]={resp:c.analista,seedVal:Math.round(c.total_jun*100)/100,seedMs:new Date(parseInt(p[2]),parseInt(p[1])-1,parseInt(p[0])).getTime(),days:{}};});
+        if(typeof YC!=='undefined')YC.forEach(c=>{if(!accCliM[c.external_id])accCliM[c.external_id]={resp:c.analista,seedVal:Math.round((c.total_dia||0)*100)/100,seedMs:new Date(MY,MM-1,maxDayNum-1).getTime(),days:{}};});
+      }
+      // Remove dias do arquivo novo e re-adiciona do raw (evita duplicata no re-import)
+      newDias.forEach(d=>{Object.values(accCliM).forEach(v=>{delete v.days[String(d)];});});
+      rC.filter(r=>newDias.has(r.date.getDate())).forEach(r=>{const d=String(r.date.getDate());if(!accCliM[r.id])accCliM[r.id]={resp:r.resp,seedVal:0,seedMs:0,days:{}};accCliM[r.id].days[d]=(accCliM[r.id].days[d]||0)+r.val;});
+      try{localStorage.setItem('dep_acc_cliM',JSON.stringify(accCliM));}catch(e){}
+      // Reconstrói cliM a partir do accCliM
       const cliM={};
-      rC.forEach(r=>{if(!cliM[r.id]||r.date>cliM[r.id].date)cliM[r.id]={date:r.date,resp:r.resp,val:0,cnt:0};});
-      rC.forEach(r=>{if(cliM[r.id]){cliM[r.id].val+=r.val;cliM[r.id].cnt++;}});
+      Object.entries(accCliM).forEach(([id,v])=>{const accVal=Object.values(v.days).reduce((s,x)=>s+x,0);const totalVal=v.seedVal+accVal;const dayNums=Object.keys(v.days).map(Number);const lastMs=dayNums.length>0?Math.max(v.seedMs,...dayNums.map(d=>new Date(MY,MM-1,d).getTime())):v.seedMs;if(lastMs>0)cliM[id]={date:new Date(lastMs),resp:v.resp,val:totalVal,cnt:Math.max(dayNums.length,1)};});
+
       const mayM={};rP.forEach(r=>{mayM[r.id]=(mayM[r.id]||0)+r.val;});
       const ds=d=>Math.round((yest-d)/864e5)+1;
       const catFn=d=>d<=1?'1 dia':d===2?'2 dias':d===3?'3 dias':'+3 dias';
       const newCL=Object.entries(cliM).map(([id,v])=>{const dias=ds(v.date);return{external_id:id,analista:v.resp,ultimo_dep:fd(v.date),total_jun:Math.round(v.val*100)/100,qtd_dep_jun:v.cnt,dias_sem_dep:dias,categoria:catFn(dias),total_may:Math.round((mayM[id]||0)*100)/100,ltv:Math.round((ltvM[id]||0)*100)/100};}).filter(c=>c.categoria!=='1 dia');
 
-      // Totais por analista
+      // Totais por analista — usa rC_KPI (inclui histórico hardcoded para dias não acumulados em raw)
       const nAJ={},nAM={};
-      rC.forEach(r=>{nAJ[r.resp]=(nAJ[r.resp]||0)+r.val;});
-      rP.forEach(r=>{nAM[r.resp]=(nAM[r.resp]||0)+r.val;});
+      rC_KPI.forEach(r=>{nAJ[r.resp]=(nAJ[r.resp]||0)+r.val;});
+      if(rP.length>0){rP.forEach(r=>{nAM[r.resp]=(nAM[r.resp]||0)+r.val;});}
+      else if(typeof AM==='object'&&Object.keys(AM).length>0){Object.assign(nAM,AM);}
 
-      // AN_DEP e DEP_DIA
+      // AN_DEP e DEP_DIA — usa rC_KPI para incluir histórico
       const nAN_DEP={};const nDEP_DIA=[];
-      rC.forEach(r=>{const d=r.date.getDate(),an=r.resp;if(!nAN_DEP[an])nAN_DEP[an]={};nAN_DEP[an][String(d)]=(nAN_DEP[an][String(d)]||0)+r.val;});
+      rC_KPI.forEach(r=>{const d=r.date.getDate(),an=r.resp;if(!nAN_DEP[an])nAN_DEP[an]={};nAN_DEP[an][String(d)]=(nAN_DEP[an][String(d)]||0)+r.val;});
       Object.entries(nAN_DEP).forEach(([an,days])=>Object.entries(days).forEach(([d,dep])=>nDEP_DIA.push({analista:an,dia:parseInt(d),dep:Math.round(dep*100)/100})));
 
-      // MO (tendência mensal) — usa os dois meses
-      const moMap={};[...allRowsCur,...allRowsPrev].forEach(r=>{const k=r.date.getFullYear()+'-'+String(r.date.getMonth()+1).padStart(2,'0');if(!moMap[k])moMap[k]={};moMap[k][r.resp]=(moMap[k][r.resp]||0)+r.val;});
+      // MO (tendência mensal) — usa rC_KPI + mês anterior
+      const moMap={};[...rC_KPI,...allRowsPrev].forEach(r=>{const k=r.date.getFullYear()+'-'+String(r.date.getMonth()+1).padStart(2,'0');if(!moMap[k])moMap[k]={};moMap[k][r.resp]=(moMap[k][r.resp]||0)+r.val;});
       const nMO=[];Object.entries(moMap).forEach(([mo,ans])=>Object.entries(ans).forEach(([an,v])=>nMO.push({month:mo,analyst:an,value:Math.round(v)})));
 
       CL=newCL;MO=nMO;AJ=nAJ;AM=nAM;
@@ -1730,10 +1756,15 @@ function importXL(ev){
               skMapNew[key].valor+=val;skMapNew[key].count_saque+=cnt;});
             const newSkRaw=Object.values(skMapNew);
             const skNewDias=new Set(newSkRaw.map(s=>s.dia));
-            const savedSkRaw=JSON.parse(localStorage.getItem('dep_acc_sk')||'[]');
+            const savedSkRawStr=localStorage.getItem('dep_acc_sk');
+            let savedSkRaw=savedSkRawStr?JSON.parse(savedSkRawStr):null;
+            if(savedSkRaw===null&&typeof SK!=='undefined'&&SK.length>0){
+              savedSkRaw=SK.filter(s=>!skNewDias.has(s.dia)).map(s=>({external_id:s.external_id,dia:s.dia,mes:s.mes||MM,analista:s.analista,valor:s.valor,count_saque:s.count_saque||1,dep_dia:s.dep_dia||0}));
+            }
+            savedSkRaw=savedSkRaw||[];
             const allSkRaw=[...savedSkRaw.filter(s=>!skNewDias.has(s.dia)),...newSkRaw];
             try{localStorage.setItem('dep_acc_sk',JSON.stringify(allSkRaw));}catch(e){}
-            SK=allSkRaw.map(s=>{const dep=depByIdDay[s.external_id]?.[s.dia]||0;
+            SK=allSkRaw.map(s=>{const dep=newDias.has(s.dia)?(depByIdDay[s.external_id]?.[s.dia]||0):(s.dep_dia||0);
               return{...s,valor:Math.round(s.valor*100)/100,dep_dia:Math.round(dep*100)/100,date:String(s.dia).padStart(2,'0')+'/'+String(s.mes).padStart(2,'0')+'/'+MY,destaque:s.valor>50000,dep_maior:dep>s.valor};});}}}
 
       // CB: CashBack (acumulado por dia)
@@ -1748,10 +1779,15 @@ function importXL(ev){
               return{external_id:id,cashback:Math.round(val*100)/100,dia:d,mes,analista:an};
             }).filter(r=>r.external_id&&!isNaN(r.cashback));
             const cbNewDias=new Set(newCbRaw.map(r=>r.dia));
-            const savedCbRaw=JSON.parse(localStorage.getItem('dep_acc_cb')||'[]');
+            const savedCbRawStr=localStorage.getItem('dep_acc_cb');
+            let savedCbRaw=savedCbRawStr?JSON.parse(savedCbRawStr):null;
+            if(savedCbRaw===null&&typeof CB!=='undefined'&&CB.length>0){
+              savedCbRaw=CB.filter(r=>!cbNewDias.has(r.dia)).map(r=>({external_id:r.external_id,cashback:r.cashback,dia:r.dia,mes:r.mes||MM,analista:r.analista,dep_dia:r.dep_dia||0}));
+            }
+            savedCbRaw=savedCbRaw||[];
             const allCbRaw=[...savedCbRaw.filter(r=>!cbNewDias.has(r.dia)),...newCbRaw];
             try{localStorage.setItem('dep_acc_cb',JSON.stringify(allCbRaw));}catch(e){}
-            CB=allCbRaw.map(r=>{const dep=depByIdDay[r.external_id]?.[r.dia]||0;
+            CB=allCbRaw.map(r=>{const dep=newDias.has(r.dia)?(depByIdDay[r.external_id]?.[r.dia]||0):(r.dep_dia||0);
               return{...r,dep_dia:Math.round(dep*100)/100,ltv:Math.round((ltvM[r.external_id]||0)*100)/100,faixa:fxa(r.cashback)};});}}}
 
       // CH: Chamados (acumulado por ticket_id)
@@ -1792,7 +1828,7 @@ function importXL(ev){
       updateDaySelects(maxDayNum, MM);
 
       applyF();
-      const diasAcc=[...new Set(freshDeps.map(r=>r.dia))].length;
+      const diasAcc=new Set(Object.values(nAN_DEP).flatMap(days=>Object.keys(days))).size||[...new Set(freshDeps.map(r=>r.dia))].length;
       st.textContent='✓ '+newCL.length+' clientes · '+SK.length+' saques · '+CB.length+' cashbacks · '+CH.length+' chamados · '+diasAcc+' dias acum. · Dados: '+DD;
       st.className='imp-st ok';
       ev.target.value='';
