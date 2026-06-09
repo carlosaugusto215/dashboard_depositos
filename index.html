@@ -323,17 +323,31 @@ tr:last-child td{border-bottom:none}
   <div class="tb-div"></div>
   <div class="tb-m" id="tb-m"></div>
   <div class="tb-rt">
-    <select class="sel" id="g-dia" onchange="applyF()" style="min-width:130px">
-      <option value="">Todos os dias</option>
-      <option value="1">01/06 (Seg)</option>
-      <option value="2">02/06 (Ter)</option>
-      <option value="3">03/06 (Qua)</option>
-      <option value="4">04/06 (Qui)</option>
-      <option value="5">05/06 (Sex)</option>
-      <option value="6">06/06 (Sáb)</option>
-      <option value="7">07/06 (Dom)</option>
-      <option value="8">08/06 (Seg)</option>
-    </select>
+    <div style="display:flex;align-items:center;gap:5px;flex-shrink:0">
+      <span style="font-size:10px;color:var(--text3);white-space:nowrap">De</span>
+      <select class="sel" id="g-dia-de" onchange="applyF()" style="min-width:80px">
+        <option value="">01/06</option>
+        <option value="2">02/06</option>
+        <option value="3">03/06</option>
+        <option value="4">04/06</option>
+        <option value="5">05/06</option>
+        <option value="6">06/06</option>
+        <option value="7">07/06</option>
+        <option value="8">08/06</option>
+      </select>
+      <span style="font-size:10px;color:var(--text3)">até</span>
+      <select class="sel" id="g-dia-ate" onchange="applyF()" style="min-width:80px">
+        <option value="">08/06</option>
+        <option value="1">01/06</option>
+        <option value="2">02/06</option>
+        <option value="3">03/06</option>
+        <option value="4">04/06</option>
+        <option value="5">05/06</option>
+        <option value="6">06/06</option>
+        <option value="7">07/06</option>
+      </select>
+      <button onclick="document.getElementById('g-dia-de').value='';document.getElementById('g-dia-ate').value='';applyF()" style="background:var(--bg3);border:1px solid var(--border);color:var(--text3);width:22px;height:22px;border-radius:5px;cursor:pointer;font-size:11px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s" title="Limpar período" onmouseover="this.style.borderColor='var(--teal)';this.style.color='var(--teal)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text3)'">×</button>
+    </div>
     <select class="sel" id="g-an" onchange="applyF()">
       <option value="">Todos os Analistas</option>
       <option>Gustavo Silva</option>
@@ -720,18 +734,6 @@ tr:last-child td{border-bottom:none}
           <div class="pill" onclick="setGPFilter(this,'perdas')" style="border-color:rgba(239,68,68,.4);color:#f87171">⬇ Perdas</div>
           <div class="pill" onclick="setGPFilter(this,'ganhos')" style="border-color:rgba(16,185,129,.4);color:#10b981">⬆ NET+</div>
         </div>
-        <select class="sel" id="gp-day-sel" onchange="setGPDayFromSel(this.value)">
-          <option value="">Todos os dias</option>
-          <option value="1">Dia 01/06 (Seg)</option>
-          <option value="2">Dia 02/06 (Ter)</option>
-          <option value="3">Dia 03/06 (Qua)</option>
-          <option value="4">Dia 04/06 (Qui)</option>
-          <option value="5">Dia 05/06 (Sex)</option>
-          <option value="6">Dia 06/06 (Sáb)</option>
-          <option value="7">Dia 07/06 (Dom)</option>
-          <option value="8">Dia 08/06 (Seg)</option>
-          <option value="9">Dia 09/06 (Ter)</option>
-        </select>
         <input type="text" class="si" placeholder="Buscar cliente…" id="gp-s" oninput="renderGPTbl()" style="width:180px">
         <select class="sel" id="gp-so" onchange="renderGPTbl()">
           <option value="net_asc">Maior perda (NET ↑)</option>
@@ -940,14 +942,20 @@ function f(v){if(v>=1e6)return'R$'+(v/1e6).toFixed(2)+'M';if(v>=1e3)return'R$'+(
 function mc(p){if(p>=80)return'var(--ok)';if(p>=40)return'var(--warn)';return'var(--crit)';}
 function tag(c){const m={'2 dias':'t2','3 dias':'t3','+3 dias':'t3p'};return`<span class="tag ${m[c]||'t3p'}">${c}</span>`;}
 function gF(){const a=document.getElementById('g-an').value;let d=a?CL.filter(c=>c.analista===a):CL;return d;}
-function gDia(){const v=document.getElementById('g-dia').value;return v?parseInt(v):null;}
+function gDia(){
+  const de=document.getElementById('g-dia-de').value;
+  const ate=document.getElementById('g-dia-ate').value;
+  return {from: de?parseInt(de):null, to: ate?parseInt(ate):null};
+}
+function gDiaLabel(){
+  const {from,to}=gDia();
+  if(from===null&&to===null) return '';
+  if(from!==null&&to!==null&&from===to) return `Dia ${from<10?'0'+from:from}/06 selecionado`;
+  const de=from!==null?(from<10?'0'+from:from)+'/06':'01/06';
+  const ate=to!==null?(to<10?'0'+to:to)+'/06':'08/06';
+  return `${de} → ${ate}`;
+}
 function applyF(){
-  /* Sync per-page day vars with global day filter */
-  const gd = gDia();
-  const gpSel = document.getElementById('gp-day-sel');
-  if(gpSel){ gpSel.value = gd !== null ? String(gd) : ''; }
-  gpDay = gd; skDay = gd; chDay = gd;
-
   renderTB();renderOV();renderAN();renderCT();renderTR();
   renderYKPIs();renderYT();
   renderChamados();
@@ -1597,10 +1605,11 @@ const CH_COLORS = ['#2563eb','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','
 
 function getCHFiltered() {
   const a = document.getElementById('g-an').value;
-  const _gd = gDia(); const dia = _gd !== null ? _gd : chDay;
+  const {from, to} = gDia();
   let d = CH;
   if (a) d = d.filter(c => c.gerente === a);
-  if (dia !== null) d = d.filter(c => c.dia === dia);
+  if (from !== null) d = d.filter(c => c.dia >= from);
+  if (to   !== null) d = d.filter(c => c.dia <= to);
   return d;
 }
 
@@ -1645,10 +1654,12 @@ function renderChDayBars() {
   // June 2026: June 1 = Monday
   const weekDayOffset = {1:'Seg',2:'Ter',3:'Qua',4:'Qui',5:'Sex',6:'Sáb',7:'Dom'};
 
+  const {from: chFrom, to: chTo} = gDia();
+  const chRangeSet = chFrom !== null || chTo !== null;
   document.getElementById('ch-day-bars').innerHTML = days.map(d => {
     const v = byDay[d] || 0;
     const pct = maxV > 0 ? (v / maxV * 100).toFixed(1) : 0;
-    const isActive = chDay === d;
+    const isActive = chRangeSet && (chFrom === null || d >= chFrom) && (chTo === null || d <= chTo);
     const barColor = isActive ? '#2563eb' : (v >= 20 ? '#ef4444' : v >= 10 ? '#f59e0b' : '#2563eb');
     const bgClass = isActive ? 'background:rgba(37,99,235,.12);border-color:rgba(37,99,235,.4)' : 'background:var(--bg3);border-color:var(--border)';
     return `<div onclick="setChDay(${d})" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;border:1px solid;cursor:pointer;margin-bottom:6px;${bgClass};transition:all .15s">
@@ -1664,36 +1675,29 @@ function renderChDayBars() {
     </div>`;
   }).join('');
 
-  // day filter pills in header
-  document.getElementById('ch-day-filter').innerHTML = chDay !== null
-    ? `<span style="font-size:11px;color:#60a5fa;font-weight:500">Dia ${chDay} selecionado</span>` : '';
+  const chLabel = gDiaLabel();
+  document.getElementById('ch-day-filter').innerHTML = chLabel
+    ? `<span style="font-size:11px;color:#60a5fa;font-weight:500">${chLabel}</span>` : '';
 }
 
 function setChDay(d) {
-  chDay = chDay === d ? null : d;
-  const gd = document.getElementById('g-dia');
-  if(gd) gd.value = chDay !== null ? String(chDay) : '';
+  const {from, to} = gDia();
+  if (from === d && to === d) {
+    document.getElementById('g-dia-de').value = '';
+    document.getElementById('g-dia-ate').value = '';
+  } else {
+    document.getElementById('g-dia-de').value = String(d);
+    document.getElementById('g-dia-ate').value = String(d);
+  }
   chPg = 1;
-  renderChDayBars();
-  renderChDonut();
-  renderChSubBars();
-  renderChGerBar();
-  renderChTbl();
-  const title = chDay !== null ? `Tickets — Dia ${chDay}/06` : 'Todos os tickets';
-  const sub = chDay !== null ? `${getCHFiltered().length} tickets neste dia` : 'Clique em um dia para filtrar';
-  document.getElementById('ch-tbl-title').textContent = title;
-  document.getElementById('ch-tbl-sub').textContent = sub;
+  applyF();
 }
 
 function clearChDay() {
-  chDay = null; chPg = 1;
-  renderChDayBars();
-  renderChDonut();
-  renderChSubBars();
-  renderChGerBar();
-  renderChTbl();
-  document.getElementById('ch-tbl-title').textContent = 'Todos os tickets';
-  document.getElementById('ch-tbl-sub').textContent = 'Clique em um dia para filtrar';
+  document.getElementById('g-dia-de').value = '';
+  document.getElementById('g-dia-ate').value = '';
+  chPg = 1;
+  applyF();
 }
 
 function renderChDonut() {
@@ -1830,19 +1834,21 @@ const SK_PAL = ['#2563eb','#10b981','#f59e0b','#8b5cf6','#ef4444','#06b6d4'];
 
 function getSKFiltered() {
   const a = document.getElementById('g-an').value;
-  const _gd = gDia(); const dia = _gd !== null ? _gd : skDay;
+  const {from, to} = gDia();
   let d = SK;
   if (a) d = d.filter(s => s.analista === a);
-  if (dia !== null) d = d.filter(s => s.dia === dia);
+  if (from !== null) d = d.filter(s => s.dia >= from);
+  if (to   !== null) d = d.filter(s => s.dia <= to);
   if (skFilter === 'destaque') d = d.filter(s => s.destaque);
   return d;
 }
 
 function getSKAll() {
   const a = document.getElementById('g-an').value;
-  const _gd = gDia(); const dia = _gd !== null ? _gd : skDay;
+  const {from, to} = gDia();
   let d = a ? SK.filter(s => s.analista === a) : SK;
-  if (dia !== null) d = d.filter(s => s.dia === dia);
+  if (from !== null) d = d.filter(s => s.dia >= from);
+  if (to   !== null) d = d.filter(s => s.dia <= to);
   return d;
 }
 
@@ -1910,10 +1916,12 @@ function renderSKDayBars() {
   const maxVol = Math.max(...days.map(d => byDay[d].vol));
   const wkDay = {1:'Seg',2:'Ter',3:'Qua',4:'Qui',5:'Sex',6:'Sáb',7:'Dom',8:'Seg'};
 
+  const {from: skFrom, to: skTo} = gDia();
+  const skRangeSet = skFrom !== null || skTo !== null;
   document.getElementById('sk-day-bars').innerHTML = days.map(d => {
     const info = byDay[d];
     const pct = maxVol > 0 ? (info.vol / maxVol * 100).toFixed(1) : 0;
-    const isActive = skDay === d;
+    const isActive = skRangeSet && (skFrom === null || d >= skFrom) && (skTo === null || d <= skTo);
     const hasBig = info.big > 0;
     const barCol = hasBig ? '#ef4444' : '#2563eb';
     const bg = isActive ? 'background:rgba(37,99,235,.1);border-color:rgba(37,99,235,.4)' : 'background:var(--bg3);border-color:var(--border)';
@@ -1936,27 +1944,27 @@ function renderSKDayBars() {
     </div>`;
   }).join('');
 
-  document.getElementById('sk-day-badge').textContent = skDay !== null ? `Dia ${skDay} selecionado` : '';
+  document.getElementById('sk-day-badge').textContent = gDiaLabel();
 }
 
 function setSKDay(d) {
-  skDay = skDay === d ? null : d;
-  const gd = document.getElementById('g-dia');
-  if(gd) gd.value = skDay !== null ? String(skDay) : '';
+  const {from, to} = gDia();
+  if (from === d && to === d) {
+    document.getElementById('g-dia-de').value = '';
+    document.getElementById('g-dia-ate').value = '';
+  } else {
+    document.getElementById('g-dia-de').value = String(d);
+    document.getElementById('g-dia-ate').value = String(d);
+  }
   skPg = 1;
-  renderSKDayBars();
-  renderSKTopCli();
-  renderSKTbl();
-  const data = getSKFiltered();
-  document.getElementById('sk-tbl-title').textContent = skDay !== null ? `Saques — Dia ${skDay}/06` : 'Todos os saques';
-  document.getElementById('sk-tbl-sub').textContent = skDay !== null ? `${data.length} registros neste dia` : 'Saques acima de R$50.000 destacados em vermelho';
+  applyF();
 }
 
 function clearSKDay() {
-  skDay = null; skPg = 1;
-  renderSKDayBars(); renderSKTopCli(); renderSKTbl();
-  document.getElementById('sk-tbl-title').textContent = 'Todos os saques';
-  document.getElementById('sk-tbl-sub').innerHTML = 'Saques acima de R$50.000 destacados em vermelho · Dep. mesmo dia: <span style="color:#10b981">verde = depositou mais que sacou</span> · <span style="color:#fbbf24">âmbar = depositou menos</span>';
+  document.getElementById('g-dia-de').value = '';
+  document.getElementById('g-dia-ate').value = '';
+  skPg = 1;
+  applyF();
 }
 
 function setSKFilter(el, f2) {
@@ -2600,10 +2608,11 @@ const GP_PS = 20;
 
 function getGPFiltered() {
   const a = document.getElementById('g-an').value;
-  const _gd = gDia(); const dia = _gd !== null ? _gd : gpDay;
+  const {from, to} = gDia();
   let d = GP;
   if (a) d = d.filter(r => r.analista === a);
-  if (dia !== null) d = d.filter(r => r.dia === dia);
+  if (from !== null) d = d.filter(r => r.dia >= from);
+  if (to   !== null) d = d.filter(r => r.dia <= to);
   if (gpFilter === 'perdas') d = d.filter(r => r.net < 0);
   if (gpFilter === 'ganhos') d = d.filter(r => r.net >= 0);
   return d;
@@ -2651,12 +2660,14 @@ function renderGPDayBars() {
   const maxAbsVal = Math.max(...days.map(d => Math.max(Math.abs(byDay[d].netPos), Math.abs(byDay[d].netNeg))));
   const wkDay = {1:'Seg',2:'Ter',3:'Qua',4:'Qui',5:'Sex',6:'Sáb',7:'Dom',8:'Seg'};
 
+  const {from: gpFrom, to: gpTo} = gDia();
+  const gpRangeSet = gpFrom !== null || gpTo !== null;
   document.getElementById('gp-day-bars').innerHTML = days.map(d => {
     const info = byDay[d];
     const posW = maxAbsVal > 0 ? (info.netPos / maxAbsVal * 100).toFixed(1) : 0;
     const negW = maxAbsVal > 0 ? (Math.abs(info.netNeg) / maxAbsVal * 100).toFixed(1) : 0;
     const netDia = info.netPos + info.netNeg;
-    const isActive = gpDay === d;
+    const isActive = gpRangeSet && (gpFrom === null || d >= gpFrom) && (gpTo === null || d <= gpTo);
     const bg = isActive ? 'background:rgba(37,99,235,.1);border-color:rgba(37,99,235,.4)' : 'background:var(--bg3);border-color:var(--border)';
     const netColor = netDia >= 0 ? '#10b981' : '#ef4444';
     const netSign  = netDia >= 0 ? '+' : '−';
@@ -2684,34 +2695,27 @@ function renderGPDayBars() {
     </div>`;
   }).join('');
 
-  document.getElementById('gp-day-badge').textContent = gpDay !== null ? `Dia ${gpDay} selecionado` : '';
-}
-
-function setGPDayFromSel(val) {
-  gpDay = val ? parseInt(val) : null;
-  const gd = document.getElementById('g-dia');
-  if(gd) gd.value = val || '';
-  gpPg = 1;
-  renderGPDayBars(); renderGPTopLosses(); renderGPTbl();
-  document.getElementById('gp-tbl-title').textContent = gpDay !== null ? `NET Deposit — Dia ${gpDay}/06` : 'Todos os registros NET';
+  document.getElementById('gp-day-badge').textContent = gDiaLabel();
 }
 
 function setGPDay(d) {
-  gpDay = gpDay === d ? null : d; gpPg = 1;
-  const sel = document.getElementById('gp-day-sel');
-  if(sel) sel.value = gpDay !== null ? String(gpDay) : '';
-  const gd = document.getElementById('g-dia');
-  if(gd) gd.value = gpDay !== null ? String(gpDay) : '';
-  renderGPDayBars(); renderGPTopLosses(); renderGPTbl();
-  document.getElementById('gp-tbl-title').textContent = gpDay !== null ? `NET Deposit — Dia ${gpDay}/06` : 'Todos os registros NET';
+  const {from, to} = gDia();
+  if (from === d && to === d) {
+    document.getElementById('g-dia-de').value = '';
+    document.getElementById('g-dia-ate').value = '';
+  } else {
+    document.getElementById('g-dia-de').value = String(d);
+    document.getElementById('g-dia-ate').value = String(d);
+  }
+  gpPg = 1;
+  applyF();
 }
 
 function clearGPDay() {
-  gpDay = null; gpPg = 1;
-  const sel = document.getElementById('gp-day-sel');
-  if (sel) sel.value = '';
-  renderGPDayBars(); renderGPTopLosses(); renderGPTbl();
-  document.getElementById('gp-tbl-title').textContent = 'Todos os registros NET';
+  document.getElementById('g-dia-de').value = '';
+  document.getElementById('g-dia-ate').value = '';
+  gpPg = 1;
+  applyF();
 }
 
 function setGPFilter(el, fl) {
@@ -2723,8 +2727,10 @@ function setGPFilter(el, fl) {
 
 function renderGPTopLosses() {
   const a = document.getElementById('g-an').value;
+  const {from, to} = gDia();
   let base = a ? GP.filter(r => r.analista === a) : GP;
-  if (gpDay !== null) base = base.filter(r => r.dia === gpDay);
+  if (from !== null) base = base.filter(r => r.dia >= from);
+  if (to   !== null) base = base.filter(r => r.dia <= to);
   const top = base.filter(r => r.net > 0).sort((a,b) => b.net - a.net).slice(0, 10);
   const maxVal = top[0] ? top[0].net : 1;
 
