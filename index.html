@@ -941,7 +941,18 @@ let catF='',cliPg=1,dData=[];
 function f(v){if(v>=1e6)return'R$'+(v/1e6).toFixed(2)+'M';if(v>=1e3)return'R$'+(v/1e3).toFixed(0)+'K';return'R$'+Math.round(v).toLocaleString('pt-BR');}
 function mc(p){if(p>=80)return'var(--ok)';if(p>=40)return'var(--warn)';return'var(--crit)';}
 function tag(c){const m={'2 dias':'t2','3 dias':'t3','+3 dias':'t3p'};return`<span class="tag ${m[c]||'t3p'}">${c}</span>`;}
-function gF(){const a=document.getElementById('g-an').value;let d=a?CL.filter(c=>c.analista===a):CL;return d;}
+function gF(){
+  const a=document.getElementById('g-an').value;
+  const {from,to}=gDia();
+  let d=a?CL.filter(c=>c.analista===a):CL;
+  if(from!==null||to!==null){
+    d=d.filter(c=>{
+      const day=parseInt(c.ultimo_dep.split('/')[0]);
+      return(from===null||day>=from)&&(to===null||day<=to);
+    });
+  }
+  return d;
+}
 function gDia(){
   const de=document.getElementById('g-dia-de').value;
   const ate=document.getElementById('g-dia-ate').value;
@@ -1052,11 +1063,27 @@ function sYPg(p){yestPg=p;renderYT();}
 /* TOPBAR */
 function renderTB(){
   const a=document.getElementById('g-an').value;
-  const jv=a?(AJ[a]||0):TJ,mv=a?(AM[a]||0):TM,meta=a?MP:MT;
+  const {from,to}=gDia();
+  const rangeSet=from!==null||to!==null;
+  const daysRange=[1,2,3,4,5,6,7,8].filter(d=>(from===null||d>=from)&&(to===null||d<=to));
+
+  let jv,mv,meta;
+  if(rangeSet){
+    const ans=a?[a]:AL;
+    jv=ans.reduce((s,an)=>s+daysRange.reduce((ss,d)=>ss+(AN_DEP[an]?.[String(d)]||0),0),0);
+    mv=a?(AM[a]||0):TM;
+    meta=a?MP:MT;
+  } else {
+    jv=a?(AJ[a]||0):TJ;
+    mv=a?(AM[a]||0):TM;
+    meta=a?MP:MT;
+  }
+
   const p=Math.min((jv/meta)*100,100),rem=Math.max(meta-jv,0);
   const col=mc(p);
+  const depLabel=rangeSet?`${from??1}/06–${to??8}/06`:'Dep. Junho';
   document.getElementById('tb-m').innerHTML=`
-    <div class="tbp"><div class="tbl">Dep. Junho</div><div class="tbv tl">${f(jv)}</div></div>
+    <div class="tbp"><div class="tbl">${depLabel}</div><div class="tbv tl">${f(jv)}</div></div>
     <div class="tbp"><div class="tbl">Dep. Maio</div><div class="tbv gn">${f(mv)}</div></div>
     <div class="tb-div" style="margin:10px 0"></div>
     <div class="tbp"><div class="tbl">Meta ${a?'analista':'total'}</div><div class="tbv am">${f(meta)}</div></div>
@@ -1100,7 +1127,13 @@ function renderOV(){
   renderTB();
   const data=gF();
   const a=document.getElementById('g-an').value;
-  const jv=a?(AJ[a]||0):TJ,meta=a?MP:MT;
+  const {from:ovF,to:ovT}=gDia();
+  const ovRangeSet=ovF!==null||ovT!==null;
+  const ovDays=[1,2,3,4,5,6,7,8].filter(d=>(ovF===null||d>=ovF)&&(ovT===null||d<=ovT));
+  const jv=ovRangeSet
+    ?(a?[a]:AL).reduce((s,an)=>s+ovDays.reduce((ss,d)=>ss+(AN_DEP[an]?.[String(d)]||0),0),0)
+    :(a?(AJ[a]||0):TJ);
+  const meta=a?MP:MT;
   const pct=((jv/meta)*100).toFixed(1);
   const d2=data.filter(c=>c.categoria==='2 dias');
   const d3=data.filter(c=>c.categoria==='3 dias');
@@ -1254,9 +1287,13 @@ function renderOV(){
 /* ANALISTAS */
 function renderAN(){
   const a=document.getElementById('g-an').value,list=a?[a]:AL;
+  const {from:anFrom,to:anTo}=gDia();
+  const CLp=(anFrom!==null||anTo!==null)
+    ?CL.filter(c=>{const d=parseInt(c.ultimo_dep.split('/')[0]);return(anFrom===null||d>=anFrom)&&(anTo===null||d<=anTo);})
+    :CL;
   const con=document.getElementById('a-cards');con.innerHTML='';
   list.forEach((an,i)=>{
-    const aD=CL.filter(c=>c.analista===an);
+    const aD=CLp.filter(c=>c.analista===an);
     const d2=aD.filter(c=>c.categoria==='2 dias');
     const d3=aD.filter(c=>c.categoria==='3 dias');
     const d3p=aD.filter(c=>c.categoria==='+3 dias');
@@ -1287,7 +1324,8 @@ function renderAN(){
   (function(){
     const _a = document.getElementById('g-an').value;
     const alist = _a ? [_a] : AL;
-    const days  = [1,2,3,4,5,6,7,8];
+    const {from:df,to:dt}=gDia();
+    const days  = [1,2,3,4,5,6,7,8].filter(d=>(df===null||d>=df)&&(dt===null||d<=dt));
     const labels= days.map(d=>`${d<10?'0'+d:d}/06`);
     const PAL   = ['#00e5c0','#2563eb','#f59e0b','#ef4444','#8b5cf6','#10b981','#f97316'];
     const wkMap = {1:'Seg',2:'Ter',3:'Qua',4:'Qui',5:'Sex',6:'Sáb',7:'Dom',8:'Seg'};
@@ -1373,9 +1411,8 @@ function selA(name){
 /* CLIENTES */
 function sCat(el,cat){catF=cat;cliPg=1;document.querySelectorAll('#cat-pr .pill').forEach(p=>p.classList.remove('on'));el.classList.add('on');renderCT();}
 function renderCT(){
-  const a=document.getElementById('g-an').value,s=document.getElementById('cli-s').value.toLowerCase(),so=document.getElementById('cli-so').value;
-  let data=CL;
-  if(a)data=data.filter(c=>c.analista===a);
+  const s=document.getElementById('cli-s').value.toLowerCase(),so=document.getElementById('cli-so').value;
+  let data=gF();
   if(catF)data=data.filter(c=>c.categoria===catF);
   if(s)data=data.filter(c=>c.external_id.toLowerCase().includes(s)||c.analista.toLowerCase().includes(s));
   const sr={dias:(a,b)=>b.dias_sem_dep-a.dias_sem_dep,ltv:(a,b)=>b.ltv-a.ltv,jun:(a,b)=>b.total_jun-a.total_jun,may:(a,b)=>b.total_may-a.total_may};
@@ -1623,8 +1660,7 @@ function renderChamados() {
 }
 
 function renderChKPIs() {
-  const a = document.getElementById('g-an').value;
-  const all = a ? CH.filter(c => c.gerente === a) : CH;
+  const all = getCHFiltered();
   const byDay = {};
   all.forEach(c => { byDay[c.dia] = (byDay[c.dia] || 0) + 1; });
   const dias = Object.keys(byDay).length;
