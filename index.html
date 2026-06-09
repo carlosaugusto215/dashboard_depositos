@@ -1709,7 +1709,7 @@ function importXL(ev){
       AN_DEP=nAN_DEP;DEP_DIA=nDEP_DIA;JD=maxDayNum;DD=fd(yest);
 
       // Helpers
-      const fPri=(ks,...ns)=>{for(const n of ns){const r=ks.find(k=>k.toLowerCase().replace(/ê/g,'e').replace(/\s/g,'').includes(n.toLowerCase().replace(/ê/g,'e').replace(/\s/g,'')));if(r)return r;}return null;};
+      const fPri=(ks,...ns)=>{const n2=s=>s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s/g,'');for(const n of ns){const r=ks.find(k=>n2(k).includes(n2(n)));if(r)return r;}return null;};
       const depByIdDay={};
       allRowsCur.forEach(r=>{const d=r.date.getDate(),id=r.id;if(!depByIdDay[id])depByIdDay[id]={};depByIdDay[id][d]=(depByIdDay[id][d]||0)+r.val;});
 
