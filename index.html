@@ -314,6 +314,7 @@ tr:last-child td{border-bottom:none}
     </button>
     <input type="file" id="finp" accept=".xlsx,.xls" onchange="importXL(event)">
     <div class="imp-st on" id="imp-st">Dados: 08/06/2026</div>
+    <div style="text-align:center;margin-top:4px"><a href="#" onclick="limparAcc();return false;" style="font-size:10px;color:var(--text3);text-decoration:none;opacity:.6" title="Limpa o histórico acumulado de imports">↺ limpar acumulado</a></div>
   </div>
 </aside>
 
@@ -1592,6 +1593,13 @@ function updateDaySelects(maxDay, mm) {
   document.getElementById('g-dia-ate').innerHTML = ateOpts;
 }
 
+function limparAcc(){
+  if(!confirm('Limpar todo o histórico acumulado? Os dados voltarão ao estado hardcoded.'))return;
+  ['deps','sk','cb','ch','prev_deps','prev_sk','prev_cb','prev_ch'].forEach(k=>localStorage.removeItem('dep_acc_'+k));
+  localStorage.removeItem('dep_acc_month');
+  document.getElementById('imp-st').textContent='Acumulado limpo.';
+}
+
 function importXL(ev){
   const file=ev.target.files[0];if(!file)return;
   const st=document.getElementById('imp-st');
@@ -1635,19 +1643,43 @@ function importXL(ev){
       }).filter(r=>r.id&&r.date&&!isNaN(r.date.getTime())&&!isNaN(r.val)&&r.excl!=1);
       if(!rows.length){st.textContent='Nenhum dado válido!';st.className='imp-st er';return;}
 
-      // D-1 = maior dia com dados no mês corrente
-      // yest = D-1 (último dia COM dados), today = D-1 + 1 (excluído)
+      // D-1 definido pelo arquivo importado
       const maxTs=Math.max(...rows.map(r=>r.date.getTime()));
       const maxDate=new Date(maxTs);maxDate.setHours(0,0,0,0);
       const MY=maxDate.getFullYear(),MM=maxDate.getMonth()+1;
       const maxDayNum=Math.max(...rows.filter(r=>r.date.getFullYear()===MY&&r.date.getMonth()+1===MM).map(r=>r.date.getDate()));
-      const yest=new Date(MY,MM-1,maxDayNum);          // D-1: último dia com dados
-      const today=new Date(MY,MM-1,maxDayNum+1);       // "hoje": excluído
+      const yest=new Date(MY,MM-1,maxDayNum);
+      const today=new Date(MY,MM-1,maxDayNum+1);
       const PM=MM===1?12:MM-1,PY=MM===1?MY-1:MY;
 
-      const rC=rows.filter(r=>r.date>=new Date(MY,MM-1,1)&&r.date<today);  // mês atual até D-1 inclusive
-      const rP=rows.filter(r=>r.date.getFullYear()===PY&&r.date.getMonth()+1===PM);
-      const ltvM={};rows.forEach(r=>{ltvM[r.id]=(ltvM[r.id]||0)+r.val;});
+      // === ACUMULAÇÃO EM localStorage ===
+      const mKey=MY+'-'+MM;
+      // Ao virar o mês: salva mês atual como "anterior" e limpa acumulado corrente
+      if(localStorage.getItem('dep_acc_month')!==mKey){
+        ['deps','sk','cb','ch'].forEach(k=>{
+          const v=localStorage.getItem('dep_acc_'+k);
+          if(v)localStorage.setItem('dep_acc_prev_'+k,v);
+          localStorage.removeItem('dep_acc_'+k);
+        });
+        localStorage.setItem('dep_acc_month',mKey);
+      }
+
+      // Dias do arquivo novo → substitui esses dias no acumulado (evita duplicata no re-import)
+      const newDias=new Set(rows.filter(r=>r.date.getMonth()+1===MM&&r.date.getFullYear()===MY).map(r=>r.date.getDate()));
+
+      // Acumula depósitos do mês atual
+      const savedDeps=JSON.parse(localStorage.getItem('dep_acc_deps')||'[]');
+      const freshDeps=[...savedDeps.filter(r=>!newDias.has(r.dia)),...rows.filter(r=>r.date.getMonth()+1===MM&&r.date.getFullYear()===MY).map(r=>({id:r.id,ms:r.date.getTime(),dia:r.date.getDate(),val:r.val,resp:r.resp}))];
+      try{localStorage.setItem('dep_acc_deps',JSON.stringify(freshDeps));}catch(e){}
+
+      // allRowsCur = mês atual acumulado; allRowsPrev = mês anterior (mantido do período anterior)
+      const allRowsCur=freshDeps.map(r=>({id:r.id,date:new Date(r.ms),val:r.val,resp:r.resp}));
+      const prevDepsRaw=JSON.parse(localStorage.getItem('dep_acc_prev_deps')||'[]');
+      const allRowsPrev=prevDepsRaw.map(r=>({id:r.id,date:new Date(r.ms),val:r.val,resp:r.resp}));
+
+      const rC=allRowsCur.filter(r=>r.date>=new Date(MY,MM-1,1)&&r.date<today);
+      const rP=allRowsPrev.filter(r=>r.date.getFullYear()===PY&&r.date.getMonth()+1===PM);
+      const ltvM={};[...allRowsCur,...allRowsPrev].forEach(r=>{ltvM[r.id]=(ltvM[r.id]||0)+r.val;});
       const cliM={};
       rC.forEach(r=>{if(!cliM[r.id]||r.date>cliM[r.id].date)cliM[r.id]={date:r.date,resp:r.resp,val:0,cnt:0};});
       rC.forEach(r=>{if(cliM[r.id]){cliM[r.id].val+=r.val;cliM[r.id].cnt++;}});
@@ -1661,78 +1693,81 @@ function importXL(ev){
       rC.forEach(r=>{nAJ[r.resp]=(nAJ[r.resp]||0)+r.val;});
       rP.forEach(r=>{nAM[r.resp]=(nAM[r.resp]||0)+r.val;});
 
-      // AN_DEP e DEP_DIA: depósito por analista por dia
+      // AN_DEP e DEP_DIA
       const nAN_DEP={};const nDEP_DIA=[];
-      rC.forEach(r=>{
-        const d=r.date.getDate(),an=r.resp;
-        if(!nAN_DEP[an])nAN_DEP[an]={};
-        nAN_DEP[an][String(d)]=(nAN_DEP[an][String(d)]||0)+r.val;
-      });
-      Object.entries(nAN_DEP).forEach(([an,days])=>
-        Object.entries(days).forEach(([d,dep])=>nDEP_DIA.push({analista:an,dia:parseInt(d),dep:Math.round(dep*100)/100})));
+      rC.forEach(r=>{const d=r.date.getDate(),an=r.resp;if(!nAN_DEP[an])nAN_DEP[an]={};nAN_DEP[an][String(d)]=(nAN_DEP[an][String(d)]||0)+r.val;});
+      Object.entries(nAN_DEP).forEach(([an,days])=>Object.entries(days).forEach(([d,dep])=>nDEP_DIA.push({analista:an,dia:parseInt(d),dep:Math.round(dep*100)/100})));
 
-      // MO (tendência mensal)
-      const moMap={};rows.forEach(r=>{const k=r.date.getFullYear()+'-'+String(r.date.getMonth()+1).padStart(2,'0');if(!moMap[k])moMap[k]={};moMap[k][r.resp]=(moMap[k][r.resp]||0)+r.val;});
+      // MO (tendência mensal) — usa os dois meses
+      const moMap={};[...allRowsCur,...allRowsPrev].forEach(r=>{const k=r.date.getFullYear()+'-'+String(r.date.getMonth()+1).padStart(2,'0');if(!moMap[k])moMap[k]={};moMap[k][r.resp]=(moMap[k][r.resp]||0)+r.val;});
       const nMO=[];Object.entries(moMap).forEach(([mo,ans])=>Object.entries(ans).forEach(([an,v])=>nMO.push({month:mo,analyst:an,value:Math.round(v)})));
 
-      // Atualiza globais
       CL=newCL;MO=nMO;AJ=nAJ;AM=nAM;
       TJ=Object.values(nAJ).reduce((s,v)=>s+v,0);
       TM=Object.values(nAM).reduce((s,v)=>s+v,0);
       AL=Object.keys(nAJ).sort((a,b)=>nAJ[b]-nAJ[a]);
-      AN_DEP=nAN_DEP;
-      DEP_DIA=nDEP_DIA;
-      JD=maxDayNum;
-      DD=fd(yest);
+      AN_DEP=nAN_DEP;DEP_DIA=nDEP_DIA;JD=maxDayNum;DD=fd(yest);
 
-      // Busca coluna por padrão prioritário: testa cada needle em ordem, retorna 1º match
+      // Helpers
       const fPri=(ks,...ns)=>{for(const n of ns){const r=ks.find(k=>k.toLowerCase().replace(/ê/g,'e').replace(/\s/g,'').includes(n.toLowerCase().replace(/ê/g,'e').replace(/\s/g,'')));if(r)return r;}return null;};
-
-      // Cross-ref: total depositado por (external_id, dia)
       const depByIdDay={};
-      rows.forEach(r=>{const d=r.date.getDate(),id=r.id;if(!depByIdDay[id])depByIdDay[id]={};depByIdDay[id][d]=(depByIdDay[id][d]||0)+r.val;});
+      allRowsCur.forEach(r=>{const d=r.date.getDate(),id=r.id;if(!depByIdDay[id])depByIdDay[id]={};depByIdDay[id][d]=(depByIdDay[id][d]||0)+r.val;});
 
-      // YC: clientes com depósito em D-1
+      // YC: ativos em D-1
       {const ycMap={};
-      rows.filter(r=>r.date.getDate()===maxDayNum&&r.date.getMonth()+1===MM&&r.date.getFullYear()===MY).forEach(r=>{if(!ycMap[r.id])ycMap[r.id]={analista:r.resp,total_dia:0,qtd_dep:0};ycMap[r.id].total_dia+=r.val;ycMap[r.id].qtd_dep++;});
+      allRowsCur.filter(r=>r.date.getDate()===maxDayNum&&r.date.getMonth()+1===MM&&r.date.getFullYear()===MY).forEach(r=>{if(!ycMap[r.id])ycMap[r.id]={analista:r.resp,total_dia:0,qtd_dep:0};ycMap[r.id].total_dia+=r.val;ycMap[r.id].qtd_dep++;});
       YC=Object.entries(ycMap).map(([id,v])=>({external_id:id,analista:v.analista,classificacao:'VIP',total_dia:Math.round(v.total_dia*100)/100,qtd_dep:v.qtd_dep,ltv:Math.round((ltvM[id]||0)*100)/100}));}
 
-      // SK: Saques
+      // SK: Saques (acumulado por dia)
       const wsSkName=wb.SheetNames.find(n=>n.toLowerCase().includes('saque'));
       if(wsSkName){const rawSk=XLSX.utils.sheet_to_json(wb.Sheets[wsSkName],{raw:true,defval:null});
         if(rawSk.length){const ks=Object.keys(rawSk[0]);
           const[skId,skV,skDia,skMes,skAn,skCnt]=[fPri(ks,'external_id','id'),fPri(ks,'saque total','saquetotal'),fPri(ks,'dia','day'),fPri(ks,'mês','mes','month'),fPri(ks,'responsav','analista','gerente'),fPri(ks,'count_withdrawal','count','qtd')];
-          if(skId&&skV&&skDia&&skAn){const skMap={};
+          if(skId&&skV&&skDia&&skAn){const skMapNew={};
             rawSk.forEach(r=>{const id=String(r[skId]||'').trim(),d=parseInt(r[skDia]),val=parseFloat(String(r[skV]||'0').replace(',','.'));if(!id||isNaN(d)||isNaN(val))return;
               const an=String(r[skAn]||'').trim(),mes=skMes?parseInt(r[skMes]):MM,cnt=skCnt?parseInt(r[skCnt]||1):1;
-              const key=id+'|'+d;if(!skMap[key])skMap[key]={external_id:id,dia:d,mes,analista:an,valor:0,count_saque:0};
-              skMap[key].valor+=val;skMap[key].count_saque+=cnt;});
-            SK=Object.values(skMap).map(s=>{const dep=depByIdDay[s.external_id]?.[s.dia]||0;
+              const key=id+'|'+d;if(!skMapNew[key])skMapNew[key]={external_id:id,dia:d,mes,analista:an,valor:0,count_saque:0};
+              skMapNew[key].valor+=val;skMapNew[key].count_saque+=cnt;});
+            const newSkRaw=Object.values(skMapNew);
+            const skNewDias=new Set(newSkRaw.map(s=>s.dia));
+            const savedSkRaw=JSON.parse(localStorage.getItem('dep_acc_sk')||'[]');
+            const allSkRaw=[...savedSkRaw.filter(s=>!skNewDias.has(s.dia)),...newSkRaw];
+            try{localStorage.setItem('dep_acc_sk',JSON.stringify(allSkRaw));}catch(e){}
+            SK=allSkRaw.map(s=>{const dep=depByIdDay[s.external_id]?.[s.dia]||0;
               return{...s,valor:Math.round(s.valor*100)/100,dep_dia:Math.round(dep*100)/100,date:String(s.dia).padStart(2,'0')+'/'+String(s.mes).padStart(2,'0')+'/'+MY,destaque:s.valor>50000,dep_maior:dep>s.valor};});}}}
 
-      // CB: CashBack
+      // CB: CashBack (acumulado por dia)
       const wsCbName=wb.SheetNames.find(n=>n.toLowerCase().includes('cash'));
       if(wsCbName){const rawCb=XLSX.utils.sheet_to_json(wb.Sheets[wsCbName],{raw:true,defval:null});
         if(rawCb.length){const ks=Object.keys(rawCb[0]);
           const[cbId,cbV,cbDia,cbMes,cbAn]=[fPri(ks,'external_id','id'),fPri(ks,'cashback'),fPri(ks,'dia','day'),fPri(ks,'mês','mes','month'),fPri(ks,'responsav','analista','vip','gerente')];
           const fxa=v=>v>=1000?'+1k':v>=500?'500–1k':v>=100?'100–500':v>=50?'50–100':v>=10?'10–50':'0–10';
-          if(cbId&&cbV&&cbAn){CB=rawCb.map(r=>{const id=String(r[cbId]||'').trim(),val=parseFloat(String(r[cbV]||'0').replace(',','.'));
-            const an=String(r[cbAn]||'').trim(),d=cbDia?parseInt(r[cbDia]):maxDayNum,mes=cbMes?parseInt(r[cbMes]):MM;
-            const dep=depByIdDay[id]?.[d]||0;
-            return{external_id:id,cashback:Math.round(val*100)/100,dep_dia:Math.round(dep*100)/100,ltv:Math.round((ltvM[id]||0)*100)/100,dia:d,mes,analista:an,faixa:fxa(val)};
-          }).filter(r=>r.external_id&&!isNaN(r.cashback));}}}
+          if(cbId&&cbV&&cbAn){
+            const newCbRaw=rawCb.map(r=>{const id=String(r[cbId]||'').trim(),val=parseFloat(String(r[cbV]||'0').replace(',','.'));
+              const an=String(r[cbAn]||'').trim(),d=cbDia?parseInt(r[cbDia]):maxDayNum,mes=cbMes?parseInt(r[cbMes]):MM;
+              return{external_id:id,cashback:Math.round(val*100)/100,dia:d,mes,analista:an};
+            }).filter(r=>r.external_id&&!isNaN(r.cashback));
+            const cbNewDias=new Set(newCbRaw.map(r=>r.dia));
+            const savedCbRaw=JSON.parse(localStorage.getItem('dep_acc_cb')||'[]');
+            const allCbRaw=[...savedCbRaw.filter(r=>!cbNewDias.has(r.dia)),...newCbRaw];
+            try{localStorage.setItem('dep_acc_cb',JSON.stringify(allCbRaw));}catch(e){}
+            CB=allCbRaw.map(r=>{const dep=depByIdDay[r.external_id]?.[r.dia]||0;
+              return{...r,dep_dia:Math.round(dep*100)/100,ltv:Math.round((ltvM[r.external_id]||0)*100)/100,faixa:fxa(r.cashback)};});}}}
 
-      // CH: Chamados
+      // CH: Chamados (acumulado por ticket_id)
       const wsChName=wb.SheetNames.find(n=>n.toLowerCase().includes('chamado')||n.toLowerCase().includes('ticket'));
       if(wsChName){const rawCh=XLSX.utils.sheet_to_json(wb.Sheets[wsChName],{raw:true,defval:null});
         if(rawCh.length){const ks=Object.keys(rawCh[0]);
           const[chCli,chTkt,chMot,chDia,chGer]=[fPri(ks,'id externa','solicitante','external','cliente'),fPri(ks,'id do ticket','ticket'),fPri(ks,'motivo'),fPri(ks,'dia','day'),fPri(ks,'gerente','responsav','analista')];
-          if(chCli&&chTkt&&chMot&&chDia&&chGer){CH=rawCh.map(r=>({
-            cliente_id:String(r[chCli]||'').trim(),ticket_id:String(r[chTkt]||'').trim(),
-            motivo:String(r[chMot]||'').trim(),dia:parseInt(r[chDia]),gerente:String(r[chGer]||'').trim()
-          })).filter(r=>r.cliente_id&&r.ticket_id&&!isNaN(r.dia));}}}
+          if(chCli&&chTkt&&chMot&&chDia&&chGer){
+            const newCH=rawCh.map(r=>({cliente_id:String(r[chCli]||'').trim(),ticket_id:String(r[chTkt]||'').trim(),motivo:String(r[chMot]||'').trim(),dia:parseInt(r[chDia]),gerente:String(r[chGer]||'').trim()})).filter(r=>r.cliente_id&&r.ticket_id&&!isNaN(r.dia));
+            const newTkts=new Set(newCH.map(r=>r.ticket_id));
+            const savedCh=JSON.parse(localStorage.getItem('dep_acc_ch')||'[]');
+            const allCH=[...savedCh.filter(r=>!newTkts.has(r.ticket_id)),...newCH];
+            try{localStorage.setItem('dep_acc_ch',JSON.stringify(allCH));}catch(e){}
+            CH=allCH;}}}
 
-      // TN: Torneios
+      // TN: Torneios (substituição direta — sem acumulação)
       const wsTnName=wb.SheetNames.find(n=>n.toLowerCase().includes('torneio'));
       if(wsTnName){const rawTn=XLSX.utils.sheet_to_json(wb.Sheets[wsTnName],{raw:true,defval:null});
         if(rawTn.length){const ks=Object.keys(rawTn[0]);
@@ -1742,22 +1777,23 @@ function importXL(ev){
               if(!tr||!id)return;if(!byTr[tr])byTr[tr]=[];byTr[tr].push({external_id:id,score:sc,torneio:tr,analista:an,ativo:true});});
             const nTN=[];Object.values(byTr).forEach(arr=>{arr.sort((a,b)=>b.score-a.score);arr.forEach((item,i)=>{item.posicao=i+1;nTN.push(item);});});TN=nTN;}}}
 
-      // GP: Grandes Perdas = join SK × dep (dep_dia já calculado no SK)
+      // GP: join SK × dep
       GP=SK.map(sk=>({external_id:sk.external_id,dia:sk.dia,dep:sk.dep_dia,saque:sk.valor,net:Math.round((sk.dep_dia-sk.valor)*100)/100,analista:sk.analista,ltv:Math.round((ltvM[sk.external_id]||0)*100)/100})).sort((a,b)=>a.net-b.net);
 
       // AN_NET: dep − saque por analista por dia
       const nAN_NET={};
       Object.entries(nAN_DEP).forEach(([an,days])=>{if(!nAN_NET[an])nAN_NET[an]={};Object.entries(days).forEach(([d,v])=>{nAN_NET[an][d]=(nAN_NET[an][d]||0)+v;});});
-      SK.forEach(sk=>{const an=sk.analista,d=String(sk.dia);if(!nAN_NET[an])nAN_NET[an]={};nAN_NET[an][d]=(nAN_NET[an][d]||0)-sk.valor;});
+      SK.filter(sk=>sk.dia<=maxDayNum).forEach(sk=>{const an=sk.analista,d=String(sk.dia);if(!nAN_NET[an])nAN_NET[an]={};nAN_NET[an][d]=(nAN_NET[an][d]||0)-sk.valor;});
       AN_NET=nAN_NET;
 
-      // Reconstrói selects de analista e período
+      // Reconstrói selects
       const selAn=document.getElementById('g-an');
       selAn.innerHTML='<option value="">Todos os Analistas</option>'+AL.map(a=>`<option>${a}</option>`).join('');
       updateDaySelects(maxDayNum, MM);
 
       applyF();
-      st.textContent='✓ '+newCL.length+' clientes · '+SK.length+' saques · '+CB.length+' cashbacks · '+CH.length+' chamados · Dados: '+DD;
+      const diasAcc=[...new Set(freshDeps.map(r=>r.dia))].length;
+      st.textContent='✓ '+newCL.length+' clientes · '+SK.length+' saques · '+CB.length+' cashbacks · '+CH.length+' chamados · '+diasAcc+' dias acum. · Dados: '+DD;
       st.className='imp-st ok';
       ev.target.value='';
     }catch(err){st.textContent='Erro: '+err.message;st.className='imp-st er';console.error(err);}
