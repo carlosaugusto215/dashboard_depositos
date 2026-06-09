@@ -601,7 +601,7 @@ tr:last-child td{border-bottom:none}
     </div>
     <div class="card">
       <div class="ch">
-        <div><div class="ct">Depósito vs Cashback — dia 07/06</div><div class="cs">Relação entre o que o cliente depositou e recebeu de cashback</div></div>
+        <div><div class="ct" id="cb-dep-title">Depósito vs Cashback</div><div class="cs">Relação entre o que o cliente depositou e recebeu de cashback</div></div>
       </div>
       <div class="cw" style="height:210px"><canvas id="cb-dep-bar"></canvas></div>
     </div>
@@ -990,7 +990,7 @@ function renderYKPIs(){
   const vip=data.filter(c=>c.classificacao==='VIP').length;
   document.getElementById('yest-kpis').innerHTML=`
     <div class="kc tl"><div class="kl">Clientes ativos ontem</div><div class="kv" style="color:var(--teal)">${data.length}</div><div class="kf">07/06/2026</div></div>
-    <div class="kc gn"><div class="kl">Total depositado</div><div class="kv" style="color:var(--may)">${f(total)}</div><div class="kf">em 07/06</div></div>
+    <div class="kc gn"><div class="kl">Total depositado</div><div class="kv" style="color:var(--may)">${f(total)}</div><div class="kf">em ${DD.slice(0,5)}</div></div>
     <div class="kc am"><div class="kl">Top analista</div><div class="kv" style="color:#fbbf24;font-size:16px;font-weight:600">${topAn?topAn[0].split(' ')[0]:'—'}</div><div class="kf">${topAn?f(topAn[1]):''}</div></div>
     <div class="kc rd"><div class="kl">Clientes VIP</div><div class="kv" style="color:#f87171">${vip}</div><div class="kf">${data.length-vip} padrão/outros</div></div>`;
   
@@ -1142,7 +1142,7 @@ function renderOV(){
 
   document.getElementById('kpi-g').innerHTML=`
     <div class="kc am"><div class="kl">Meta Mensal</div><div class="kv" style="color:#fbbf24">${f(meta)}</div><div class="kb b-am">${pct}% atingido</div></div>
-    <div class="kc tl"><div class="kl">Dep. Junho</div><div class="kv" style="color:var(--teal)">${f(jv)}</div><div class="kf">até 07/06 · excl. hoje</div></div>
+    <div class="kc tl"><div class="kl">Dep. Junho</div><div class="kv" style="color:var(--teal)">${f(jv)}</div><div class="kf">até ${DD.slice(0,5)} · excl. hoje</div></div>
     <div class="kc gn"><div class="kl">Dep. Maio</div><div class="kv" style="color:var(--may)">${f(a?(AM[a]||0):TM)}</div><div class="kf">mês completo</div></div>
     <div class="kc rd"><div class="kl">Clientes em Alerta</div><div class="kv" style="cursor:pointer;color:#f87171" onclick="openD('Todos em alerta','2+ dias sem depositar',CL)">${d2.length+d3.length+d3p.length}</div><div class="kb b-rd">2+ dias sem dep.</div></div>`;
 
@@ -2378,6 +2378,11 @@ function renderCBTopCli() {
 }
 
 function renderCBDepBar() {
+  const ddLabel = DD.slice(0,5);
+  const el = document.getElementById('cb-dep-title');
+  if (el) el.textContent = `Depósito vs Cashback — dia ${ddLabel}`;
+  const th = document.getElementById('cb-dep-th');
+  if (th) th.textContent = `Dep. ${ddLabel}`;
   const a = document.getElementById('g-an').value;
   const all = (a ? CB.filter(c => c.analista === a) : CB)
     .filter(r => r.dep_dia > 0)
@@ -2467,7 +2472,7 @@ function renderCBTbl() {
       <tr>
         <th>#</th><th>ID Cliente</th><th>Analista</th>
         <th style="text-align:right">Cashback</th>
-        <th style="text-align:right">Dep. 07/06</th>
+        <th style="text-align:right" id="cb-dep-th">Dep. D-1</th>
         <th style="text-align:right">LTV</th>
         <th>Faixa</th>
       </tr>
