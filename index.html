@@ -313,7 +313,7 @@ tr:last-child td{border-bottom:none}
       Importar Excel
     </button>
     <input type="file" id="finp" accept=".xlsx,.xls" onchange="importXL(event)">
-    <div class="imp-st on" id="imp-st">Dados: 09/06/2026</div>
+    <div class="imp-st on" id="imp-st">Dados: 08/06/2026</div>
   </div>
 </aside>
 
@@ -932,8 +932,9 @@ let NET_DIA=[{"analista": "Gustavo Silva", "dia": 1, "net": 7516.78}, {"analista
 let TJ=6450459.82;
 let TM=30175325.26;
 let DD='09/06/2026';
-const MT=50000000,MP=8333333,MD=31,JD=8,PS=15;
+const MT=50000000,MP=8333333,MD=31,PS=15;
 const META_DIA=1600000;
+let JD=8;
 let AL=Object.keys(AJ).sort((a,b)=>AJ[b]-AJ[a]);
 let catF='',cliPg=1,dData=[];
 
@@ -1230,12 +1231,14 @@ function renderOV(){
   }});
   /* Daily deposits bar chart */
   (function(){
-    const DD_DATA = {1: 901627.22, 2: 715068.6, 3: 737598.59, 4: 688762.78, 5: 1001879.57, 6: 742570.48, 7: 785521.46, 8: 877431.12};
     const ctx_d = document.getElementById('c-daily-dep');
     if(!ctx_d) return;
     if(ctx_d._c) ctx_d._c.destroy();
-    const days = Object.keys(DD_DATA).map(Number).sort((x,y)=>x-y);
-    const vals = days.map(d=>DD_DATA[d]);
+    const {from:ddF,to:ddT}=gDia();
+    const _a=document.getElementById('g-an').value;
+    const _ans=_a?[_a]:AL;
+    const days=[...new Set(Object.values(AN_DEP).flatMap(o=>Object.keys(o).map(Number)))].filter(d=>(ddF===null||d>=ddF)&&(ddT===null||d<=ddT)).sort((x,y)=>x-y);
+    const vals=days.map(d=>_ans.reduce((s,an)=>s+(AN_DEP[an]?.[String(d)]||0),0));
     const wkMap={1:'Seg',2:'Ter',3:'Qua',4:'Qui',5:'Sex',6:'Sáb',7:'Dom',8:'Seg'};
     ctx_d._c = new Chart(ctx_d,{
       type:'bar',
@@ -1446,8 +1449,8 @@ function renderCT(){
     'Luiz Santos':'Luiz','Maria Rodrigues':'Maria','Priscila Borges de Oliveira':'Priscila'
   };
 
-  const days_all = [1,2,3,4,5,6,7,8];
-  const wkDayMap = {1:'Seg',2:'Ter',3:'Qua',4:'Qui',5:'Sex',6:'Sáb',7:'Dom',8:'Seg'};
+  const days_all = [...new Set(DEP_DIA.map(x=>x.dia))].sort((a,b)=>a-b);
+  const wkDayMap = {1:'Seg',2:'Ter',3:'Qua',4:'Qui',5:'Sex',6:'Sáb',7:'Dom',8:'Seg',9:'Ter',10:'Qua',11:'Qui',12:'Sex',13:'Sáb',14:'Dom',15:'Seg'};
   const labels_dias = days_all.map(d=>`${d<10?'0'+d:d}/06`);
 
   const dep_vals = days_all.map(d=>{
@@ -1535,7 +1538,7 @@ function renderTR(){
   const tr=((pJ-tM)/tM*100).toFixed(1);
   document.getElementById('tr-kpis').innerHTML=`
     <div class="kc gn"><div class="kl">Maio 2026</div><div class="kv" style="color:var(--may)">${f(tM)}</div><div class="kf">mês fechado</div></div>
-    <div class="kc tl"><div class="kl">Junho (até 07/06)</div><div class="kv" style="color:var(--teal)">${f(tJ)}</div><div class="kf">excluindo hoje</div></div>
+    <div class="kc tl"><div class="kl">Junho (até ${DD.slice(0,5)})</div><div class="kv" style="color:var(--teal)">${f(tJ)}</div><div class="kf">excluindo hoje</div></div>
     <div class="kc am"><div class="kl">Projeção Junho</div><div class="kv" style="color:#fbbf24">${f(pJ)}</div><div class="kb ${parseFloat(tr)>=0?'b-gn':'b-rd'}">${parseFloat(tr)>=0?'+':''}${tr}% vs Maio</div></div>`;
   const pal=['#00e5c0','#8b5cf6','#f59e0b','#ef4444','#3b82f6','#10b981'];
   const cx=document.getElementById('c-tline');
@@ -1580,28 +1583,71 @@ function goTo(id,el){
 }
 
 /* IMPORT EXCEL */
+function updateDaySelects(maxDay, mm) {
+  const pad = d => String(d).padStart(2,'0');
+  const mo = String(mm).padStart(2,'0');
+  let deOpts = `<option value="">01/${mo}</option>`;
+  for (let d = 2; d <= maxDay; d++) deOpts += `<option value="${d}">${pad(d)}/${mo}</option>`;
+  document.getElementById('g-dia-de').innerHTML = deOpts;
+  let ateOpts = `<option value="">${pad(maxDay)}/${mo}</option>`;
+  for (let d = 1; d < maxDay; d++) ateOpts += `<option value="${d}">${pad(d)}/${mo}</option>`;
+  document.getElementById('g-dia-ate').innerHTML = ateOpts;
+}
+
 function importXL(ev){
   const file=ev.target.files[0];if(!file)return;
   const st=document.getElementById('imp-st');
   st.textContent='Lendo…';st.className='imp-st';
-  const r=new FileReader();
-  r.onload=e=>{
+  const rd=new FileReader();
+  rd.onload=e=>{
     try{
       const wb=XLSX.read(e.target.result,{type:'array',cellDates:true});
-      const ws=wb.Sheets[wb.SheetNames[0]];
-      const raw=XLSX.utils.sheet_to_json(ws,{raw:false,dateNF:'yyyy-mm-dd'});
+      // Procura aba "Deposito" (case-insensitive), senão usa a primeira
+      const wsName=wb.SheetNames.find(n=>n.toLowerCase().replace(/[oi]/g,c=>c==='o'?'o':'i').includes('deposit'))||wb.SheetNames[0];
+      const ws=wb.Sheets[wsName];
+      const raw=XLSX.utils.sheet_to_json(ws,{raw:true,defval:null});
       if(!raw.length){st.textContent='Arquivo vazio!';st.className='imp-st er';return;}
       const keys=Object.keys(raw[0]);
-      const fi=(...ns)=>keys.find(k=>ns.some(n=>k.toLowerCase().includes(n.toLowerCase())))||null;
-      const cId=fi('external_id','id','cliente'),cD=fi('date','data','dt'),cV=fi('valor','value','deposito','deposit'),cR=fi('responsav','analyst','analista','resp'),cE=fi('excluido','excluded','excl');
-      if(!cId||!cD||!cV||!cR){st.textContent='Colunas não encontradas!';st.className='imp-st er';return;}
-      const rows=raw.map(r=>({id:String(r[cId]||'').trim(),date:r[cD]?new Date(r[cD]):null,val:parseFloat(String(r[cV]||'0').replace(',','.')),resp:String(r[cR]||'').trim(),excl:cE?parseFloat(r[cE]||0):0})).filter(r=>r.id&&r.date&&!isNaN(r.val)&&r.excl!=1);
+      const fi=(...ns)=>keys.find(k=>ns.some(n=>k.toLowerCase().replace(/ê/g,'e').replace(/\s/g,'').includes(n.toLowerCase().replace(/\s/g,''))))||null;
+      // Detecta colunas
+      const cId=fi('external_id','id','cliente');
+      const cV=fi('valor','value','deposito','deposit');
+      const cR=fi('responsav','analyst','analista','resp','gerente');
+      const cE=fi('excluido','excluded','excl');
+      // Detecta modo de data: dia+ano+mês ou coluna de data única
+      const cDia=fi('dia','day');
+      const cAno=fi('ano','year');
+      const cMes=fi('mes','mês','month');
+      const hasDiaCols=!!(cDia&&cAno&&cMes);
+      const cD=hasDiaCols?null:fi('date','data','dt');
+      if(!cId||(!cD&&!hasDiaCols)||!cV||!cR){
+        st.textContent='Colunas não encontradas! Esperado: id, dia+ano+mês (ou data), valor, analista';
+        st.className='imp-st er';return;
+      }
+      const fd=d=>String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();
+      const rows=raw.map(r=>{
+        let date=null;
+        if(hasDiaCols){
+          const dia=parseInt(r[cDia]),ano=parseInt(r[cAno]),mes=parseInt(r[cMes]);
+          if(!isNaN(dia)&&!isNaN(ano)&&!isNaN(mes)) date=new Date(ano,mes-1,dia);
+        } else {
+          date=r[cD]?new Date(r[cD]):null;
+        }
+        return{id:String(r[cId]||'').trim(),date,val:parseFloat(String(r[cV]||'0').replace(',','.')),resp:String(r[cR]||'').trim(),excl:cE?parseFloat(r[cE]||0):0};
+      }).filter(r=>r.id&&r.date&&!isNaN(r.date.getTime())&&!isNaN(r.val)&&r.excl!=1);
       if(!rows.length){st.textContent='Nenhum dado válido!';st.className='imp-st er';return;}
-      const maxDate=new Date(Math.max(...rows.map(r=>r.date)));
-      const today=new Date(maxDate);today.setHours(0,0,0,0);
-      const yest=new Date(today);yest.setDate(yest.getDate()-1);
-      const MY=today.getFullYear(),MM=today.getMonth()+1,PM=MM===1?12:MM-1,PY=MM===1?MY-1:MY;
-      const rC=rows.filter(r=>r.date.getFullYear()===MY&&r.date.getMonth()+1===MM&&r.date<today);
+
+      // D-1 = maior dia com dados no mês corrente
+      // yest = D-1 (último dia COM dados), today = D-1 + 1 (excluído)
+      const maxTs=Math.max(...rows.map(r=>r.date.getTime()));
+      const maxDate=new Date(maxTs);maxDate.setHours(0,0,0,0);
+      const MY=maxDate.getFullYear(),MM=maxDate.getMonth()+1;
+      const maxDayNum=Math.max(...rows.filter(r=>r.date.getFullYear()===MY&&r.date.getMonth()+1===MM).map(r=>r.date.getDate()));
+      const yest=new Date(MY,MM-1,maxDayNum);          // D-1: último dia com dados
+      const today=new Date(MY,MM-1,maxDayNum+1);       // "hoje": excluído
+      const PM=MM===1?12:MM-1,PY=MM===1?MY-1:MY;
+
+      const rC=rows.filter(r=>r.date>=new Date(MY,MM-1,1)&&r.date<today);  // mês atual até D-1 inclusive
       const rP=rows.filter(r=>r.date.getFullYear()===PY&&r.date.getMonth()+1===PM);
       const ltvM={};rows.forEach(r=>{ltvM[r.id]=(ltvM[r.id]||0)+r.val;});
       const cliM={};
@@ -1610,26 +1656,49 @@ function importXL(ev){
       const mayM={};rP.forEach(r=>{mayM[r.id]=(mayM[r.id]||0)+r.val;});
       const ds=d=>Math.round((yest-d)/864e5)+1;
       const catFn=d=>d<=1?'1 dia':d===2?'2 dias':d===3?'3 dias':'+3 dias';
-      const fd=d=>String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();
       const newCL=Object.entries(cliM).map(([id,v])=>{const dias=ds(v.date);return{external_id:id,analista:v.resp,ultimo_dep:fd(v.date),total_jun:Math.round(v.val*100)/100,qtd_dep_jun:v.cnt,dias_sem_dep:dias,categoria:catFn(dias),total_may:Math.round((mayM[id]||0)*100)/100,ltv:Math.round((ltvM[id]||0)*100)/100};}).filter(c=>c.categoria!=='1 dia');
+
+      // Totais por analista
       const nAJ={},nAM={};
-      rows.forEach(r=>{if(r.date.getFullYear()===MY&&r.date.getMonth()+1===MM&&r.date<today)nAJ[r.resp]=(nAJ[r.resp]||0)+r.val;if(r.date.getFullYear()===PY&&r.date.getMonth()+1===PM)nAM[r.resp]=(nAM[r.resp]||0)+r.val;});
+      rC.forEach(r=>{nAJ[r.resp]=(nAJ[r.resp]||0)+r.val;});
+      rP.forEach(r=>{nAM[r.resp]=(nAM[r.resp]||0)+r.val;});
+
+      // AN_DEP e DEP_DIA: depósito por analista por dia
+      const nAN_DEP={};const nDEP_DIA=[];
+      rC.forEach(r=>{
+        const d=r.date.getDate(),an=r.resp;
+        if(!nAN_DEP[an])nAN_DEP[an]={};
+        nAN_DEP[an][String(d)]=(nAN_DEP[an][String(d)]||0)+r.val;
+      });
+      Object.entries(nAN_DEP).forEach(([an,days])=>
+        Object.entries(days).forEach(([d,dep])=>nDEP_DIA.push({analista:an,dia:parseInt(d),dep:Math.round(dep*100)/100})));
+
+      // MO (tendência mensal)
       const moMap={};rows.forEach(r=>{const k=r.date.getFullYear()+'-'+String(r.date.getMonth()+1).padStart(2,'0');if(!moMap[k])moMap[k]={};moMap[k][r.resp]=(moMap[k][r.resp]||0)+r.val;});
       const nMO=[];Object.entries(moMap).forEach(([mo,ans])=>Object.entries(ans).forEach(([an,v])=>nMO.push({month:mo,analyst:an,value:Math.round(v)})));
+
+      // Atualiza globais
       CL=newCL;MO=nMO;AJ=nAJ;AM=nAM;
       TJ=Object.values(nAJ).reduce((s,v)=>s+v,0);
       TM=Object.values(nAM).reduce((s,v)=>s+v,0);
       AL=Object.keys(nAJ).sort((a,b)=>nAJ[b]-nAJ[a]);
-      DD=fd(yest)+' (ref)';
-      const sel=document.getElementById('g-an');
-      sel.innerHTML='<option value="">Todos os Analistas</option>'+AL.map(a=>`<option>${a}</option>`).join('');
+      AN_DEP=nAN_DEP;
+      DEP_DIA=nDEP_DIA;
+      JD=maxDayNum;
+      DD=fd(yest);
+
+      // Reconstrói selects de analista e período
+      const selAn=document.getElementById('g-an');
+      selAn.innerHTML='<option value="">Todos os Analistas</option>'+AL.map(a=>`<option>${a}</option>`).join('');
+      updateDaySelects(maxDayNum, MM);
+
       applyF();
-      st.textContent='✓ '+newCL.length+' clientes · '+DD;
+      st.textContent='✓ '+newCL.length+' clientes · Dados: '+DD;
       st.className='imp-st ok';
       ev.target.value='';
     }catch(err){st.textContent='Erro: '+err.message;st.className='imp-st er';console.error(err);}
   };
-  r.readAsArrayBuffer(file);
+  rd.readAsArrayBuffer(file);
 }
 
 
