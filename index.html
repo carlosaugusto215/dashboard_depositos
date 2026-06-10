@@ -1253,6 +1253,8 @@ function renderOV(){
     const {from:ddF,to:ddT}=gDia();
     const _a=document.getElementById('g-an').value;
     const _ans=_a?[_a]:AL;
+    const metaDia=_a?Math.round(META_DIA/AL.length):META_DIA;
+    ctx_d.dataset.metaDia=String(metaDia);
     const days=[...new Set(Object.values(AN_DEP).flatMap(o=>Object.keys(o).map(Number)))].filter(d=>(ddF===null||d>=ddF)&&(ddT===null||d<=ddT)).sort((x,y)=>x-y);
     const vals=days.map(d=>_ans.reduce((s,an)=>s+(AN_DEP[an]?.[String(d)]||0),0));
     const wkMap={1:'Seg',2:'Ter',3:'Qua',4:'Qui',5:'Sex',6:'Sáb',7:'Dom',8:'Seg'};
@@ -1265,9 +1267,9 @@ function renderOV(){
            backgroundColor: vals.map((v,i) => {
              const sel = gDia();
              if(sel !== null && days[i] !== sel) return 'rgba(37,99,235,.25)';
-             return v >= META_DIA ? '#00e5c0' : '#2563eb';
+             return v >= metaDia ? '#00e5c0' : '#2563eb';
            }),
-           hoverBackgroundColor: vals.map(v => v >= META_DIA ? '#00ffdb' : '#3b82f6'),
+           hoverBackgroundColor: vals.map(v => v >= metaDia ? '#00ffdb' : '#3b82f6'),
            borderRadius:6,borderSkipped:false}
         ]
       },
@@ -1275,7 +1277,7 @@ function renderOV(){
         responsive:true,maintainAspectRatio:false,
         scales:{
           x:{ticks:{color:'#7c8fa8',font:{size:11}},grid:{color:'rgba(255,255,255,.04)'}},
-          y:{suggestedMax:1800000, ticks:{color:'#7c8fa8',font:{size:10},callback:v=>f(v)},grid:{color:'rgba(255,255,255,.04)'}}
+          y:{suggestedMax:Math.round(metaDia*1.3), ticks:{color:'#7c8fa8',font:{size:10},callback:v=>f(v)},grid:{color:'rgba(255,255,255,.04)'}}
         },
         plugins:{
           legend:{display:false},
@@ -1288,14 +1290,15 @@ function renderOV(){
       id:'metaDiaria',
       afterDraw(ch){
         if(ch.canvas.id!=='c-daily-dep') return;
-        const y=ch.scales.y, px=y.getPixelForValue(META_DIA);
+        const md=parseFloat(ch.canvas.dataset.metaDia)||META_DIA;
+        const y=ch.scales.y, px=y.getPixelForValue(md);
         const{left,right}=ch.chartArea, ctx=ch.ctx;
         ctx.save();
         ctx.setLineDash([6,4]);ctx.strokeStyle='rgba(239,68,68,.75)';ctx.lineWidth=2;
         ctx.beginPath();ctx.moveTo(left,px);ctx.lineTo(right,px);ctx.stroke();
         ctx.setLineDash([]);
         ctx.fillStyle='#f87171';ctx.font='600 11px Inter';
-        ctx.fillText('Meta R$1,6M',left+4,px-5);
+        ctx.fillText('Meta '+f(md),left+4,px-5);
         ctx.restore();
       }
     });
