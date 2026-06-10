@@ -315,6 +315,14 @@ tr:last-child td{border-bottom:none}
     <input type="file" id="finp" accept=".xlsx,.xls" onchange="importXL(event)">
     <div class="imp-st on" id="imp-st">Dados: 08/06/2026</div>
     <div style="text-align:center;margin-top:4px"><a href="#" onclick="limparAcc();return false;" style="font-size:10px;color:var(--text3);text-decoration:none;opacity:.6" title="Limpa o histórico acumulado de imports">↺ limpar acumulado</a></div>
+    <div id="pub-section" style="display:none;margin-top:10px">
+      <button class="imp-btn" id="pub-btn" onclick="publicarDados(this)" style="border-color:var(--teal);color:var(--teal)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+        Publicar para todos
+      </button>
+      <div class="imp-st" id="pub-st"></div>
+      <div style="text-align:center;margin-top:4px"><a href="#" onclick="resetGhToken();return false;" style="font-size:10px;color:var(--text3);text-decoration:none;opacity:.6">↺ trocar token GitHub</a></div>
+    </div>
   </div>
 </aside>
 
@@ -887,6 +895,7 @@ function applySession(sess){
   document.getElementById('logout-btn').style.display='flex';
   if(sess.role==='admin'){
     document.getElementById('admin-badge').style.display='flex';
+    document.getElementById('pub-section').style.display='block';
   } else {
     const sel=document.getElementById('g-an');
     sel.value=sess.name;
@@ -1623,6 +1632,54 @@ function limparAcc(){
   localStorage.removeItem('dep_acc_month');
   localStorage.removeItem('dep_snap');
   document.getElementById('imp-st').textContent='Acumulado limpo.';
+}
+
+function resetGhToken(){
+  localStorage.removeItem('dep_gh_token');
+  document.getElementById('pub-st').textContent='Token removido. Próxima publicação pedirá novo token.';
+}
+
+async function publicarDados(btn){
+  let token=localStorage.getItem('dep_gh_token');
+  if(!token){
+    token=prompt('GitHub Personal Access Token\n(Fine-grained: "Contents: Read and write" no repo dashboard_depositos)\n\nOu classic token com escopo "repo":');
+    if(!token)return;
+    token=token.trim();
+    localStorage.setItem('dep_gh_token',token);
+  }
+  const st=document.getElementById('pub-st');
+  btn.disabled=true;
+  st.textContent='Buscando arquivo no GitHub…';st.className='imp-st';
+  try{
+    const api='https://api.github.com/repos/carlosaugusto215/dashboard_depositos/contents/index.html';
+    const headers={'Authorization':'Bearer '+token,'Accept':'application/vnd.github.v3+json'};
+    const getR=await fetch(api,{headers});
+    if(!getR.ok){const e=await getR.json().catch(()=>({}));throw new Error(e.message||getR.status);}
+    const fd=await getR.json();
+    // Decodifica UTF-8
+    const binStr=atob(fd.content.replace(/\n/g,''));
+    const bytes=new Uint8Array(binStr.length);
+    for(let i=0;i<binStr.length;i++)bytes[i]=binStr.charCodeAt(i);
+    let html=new TextDecoder('utf-8').decode(bytes);
+    // Substitui variáveis hardcoded
+    const rep=(h,name,val)=>h.replace(new RegExp('^let '+name+'=.*$','m'),'let '+name+'='+JSON.stringify(val)+';');
+    html=rep(html,'CL',CL);html=rep(html,'YC',YC);html=rep(html,'SK',SK);
+    html=rep(html,'CB',CB);html=rep(html,'CH',CH);html=rep(html,'TN',TN);
+    html=rep(html,'GP',GP);html=rep(html,'AN_DEP',AN_DEP);html=rep(html,'AN_NET',AN_NET);
+    html=rep(html,'DEP_DIA',DEP_DIA);html=rep(html,'AJ',AJ);html=rep(html,'AM',AM);
+    html=rep(html,'MO',MO);html=rep(html,'TJ',TJ);html=rep(html,'TM',TM);
+    html=rep(html,'DD',DD);html=rep(html,'JD',JD);html=rep(html,'AL',AL);
+    // Codifica de volta para base64 UTF-8
+    const enc=btoa(new TextEncoder().encode(html).reduce((s,b)=>s+String.fromCharCode(b),''));
+    st.textContent='Enviando para o GitHub…';
+    const putR=await fetch(api,{method:'PUT',headers:{...headers,'Content-Type':'application/json'},body:JSON.stringify({message:'dados: hardcoded atualizado até dia '+JD+' ('+DD+')',content:enc,sha:fd.sha})});
+    if(!putR.ok){const e=await putR.json().catch(()=>({}));throw new Error(e.message||putR.status);}
+    st.textContent='✓ Publicado! Vercel atualiza em ~30s · até dia '+JD+' ('+DD+')';
+    st.className='imp-st ok';
+  }catch(err){
+    st.textContent='Erro: '+err.message;st.className='imp-st er';
+    if(err.message.includes('401')||err.message.toLowerCase().includes('bad credentials')){localStorage.removeItem('dep_gh_token');}
+  }finally{btn.disabled=false;}
 }
 
 function importXL(ev){
