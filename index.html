@@ -1029,6 +1029,8 @@ const YPS=20;
 let ccPg=1;
 const CC_PS=20;
 let DEP_ANO={};
+let MO_MENSAL={};  // {YYYY-MM: totalDep} — totais mensais direto das rows brutas
+let SK_MENSAL={};  // {YYYY-MM: totalSaque} — totais mensais de saques
 
 function renderYKPIs(){
   const a=document.getElementById('g-an').value;
@@ -1641,8 +1643,16 @@ function renderCarteira(){
   // gráficos Jan–Jun 2026 fixos
   const MONTHS=['2026-01','2026-02','2026-03','2026-04','2026-05','2026-06'];
   const M_LABELS=['Jan/26','Fev/26','Mar/26','Abr/26','Mai/26','Jun/26'];
-  const depByM=MONTHS.map(m=>{const mo=MO.filter(r=>r.month===m);return(a?mo.filter(r=>analysts.includes(r.analyst)):mo).reduce((s,r)=>s+r.value,0);});
-  const skByM={};SK.filter(r=>analysts.includes(r.analista)).forEach(r=>{const k=`2026-${String(r.mes).padStart(2,'0')}`;skByM[k]=(skByM[k]||0)+(r.valor||0);});
+  // Depósito por mês: se "Todos" usa MO_MENSAL (total bruto das rows, imune a nomes de analista)
+  const depByM=MONTHS.map(m=>{
+    if(!a&&Object.keys(MO_MENSAL).length>0)return Math.round(MO_MENSAL[m]||0);
+    const mo=MO.filter(r=>r.month===m);
+    return(a?mo.filter(r=>analysts.includes(r.analyst)):mo).reduce((s,r)=>s+r.value,0);
+  });
+  // Saques por mês: se "Todos" usa SK_MENSAL; senão filtra SK por analista
+  const skByM={};
+  if(!a&&Object.keys(SK_MENSAL).length>0){Object.entries(SK_MENSAL).forEach(([k,v])=>skByM[k]=v);}
+  else{SK.filter(r=>analysts.includes(r.analista)).forEach(r=>{const k=`2026-${String(r.mes).padStart(2,'0')}`;skByM[k]=(skByM[k]||0)+(r.valor||0);});}
   const netByM=MONTHS.map((m,i)=>depByM[i]-(skByM[m]||0));
   const gdep=document.getElementById('cc-dep-chart');
   if(gdep._c)gdep._c.destroy();
@@ -1717,7 +1727,7 @@ function updateDaySelects(maxDay, mm) {
 
 function saveSnap(maxDay, mm){
   try{
-    const snap={CL,YC,SK,CB,CH,TN,GP,AN_DEP,AN_NET,DEP_DIA,AJ,AM,MO,TJ,TM,AL,JD,DD,CLI_NAMES,CARTEIRA,DEP_ANO,maxDay,mm};
+    const snap={CL,YC,SK,CB,CH,TN,GP,AN_DEP,AN_NET,DEP_DIA,AJ,AM,MO,TJ,TM,AL,JD,DD,CLI_NAMES,CARTEIRA,DEP_ANO,MO_MENSAL,SK_MENSAL,maxDay,mm};
     localStorage.setItem('dep_snap',JSON.stringify(snap));
   }catch(e){}
 }
@@ -1733,6 +1743,8 @@ function loadSnap(){
     if(s.CLI_NAMES)CLI_NAMES=s.CLI_NAMES;
     if(s.CARTEIRA)CARTEIRA=s.CARTEIRA;
     if(s.DEP_ANO)DEP_ANO=s.DEP_ANO;
+    if(s.MO_MENSAL)MO_MENSAL=s.MO_MENSAL;
+    if(s.SK_MENSAL)SK_MENSAL=s.SK_MENSAL;
     const selAn=document.getElementById('g-an');
     selAn.innerHTML='<option value="">Todos os Analistas</option>'+AL.map(a=>`<option>${a}</option>`).join('');
     updateDaySelects(s.maxDay, s.mm);
@@ -1787,6 +1799,8 @@ async function publicarDados(btn){
     html=rep(html,'CLI_NAMES',CLI_NAMES);
     html=rep(html,'CARTEIRA',CARTEIRA);
     html=rep(html,'DEP_ANO',DEP_ANO);
+    html=rep(html,'MO_MENSAL',MO_MENSAL);
+    html=rep(html,'SK_MENSAL',SK_MENSAL);
     html=html.replace(/id="imp-st">[^<]*<\/div>/,'id="imp-st">Dados: '+DD+'</div>');
     // Codifica de volta para base64 UTF-8
     const enc=btoa(new TextEncoder().encode(html).reduce((s,b)=>s+String.fromCharCode(b),''));
@@ -1940,6 +1954,12 @@ function importXL(ev){
       // DEP_ANO: total anual por cliente (usado na tabela Carteira)
       const depAnoTmp={};rows.filter(r=>r.date.getFullYear()===MY).forEach(r=>{depAnoTmp[r.id]=(depAnoTmp[r.id]||0)+r.val;});
       DEP_ANO=depAnoTmp;
+      // MO_MENSAL: total bruto por mês direto das rows (independe de nome de analista)
+      // Mês atual usa rC_KPI para preservar dados hardcoded de dias sem raw
+      const moMensalTmp={};
+      rows.filter(r=>!(r.date.getFullYear()===MY&&r.date.getMonth()+1===MM)).forEach(r=>{const k=r.date.getFullYear()+'-'+String(r.date.getMonth()+1).padStart(2,'0');moMensalTmp[k]=(moMensalTmp[k]||0)+r.val;});
+      rC_KPI.forEach(r=>{const k=r.date.getFullYear()+'-'+String(r.date.getMonth()+1).padStart(2,'0');moMensalTmp[k]=(moMensalTmp[k]||0)+r.val;});
+      MO_MENSAL=moMensalTmp;
 
       CL=newCL;MO=nMO;AJ=nAJ;AM=nAM;
       TJ=Object.values(nAJ).reduce((s,v)=>s+v,0);
@@ -1983,7 +2003,10 @@ function importXL(ev){
             const allSkRaw=[...savedSkRaw.filter(s=>!skNewDias.has(s.dia)),...newSkRaw];
             try{localStorage.setItem('dep_acc_sk',JSON.stringify(allSkRaw));}catch(e){}
             SK=allSkRaw.map(s=>{const dep=newDias.has(s.dia)?(depByIdDay[s.external_id]?.[s.dia]||0):(s.dep_dia||0);
-              return{...s,valor:Math.round(s.valor*100)/100,dep_dia:Math.round(dep*100)/100,date:String(s.dia).padStart(2,'0')+'/'+String(s.mes).padStart(2,'0')+'/'+MY,destaque:s.valor>50000,dep_maior:dep>s.valor};});}}}
+              return{...s,valor:Math.round(s.valor*100)/100,dep_dia:Math.round(dep*100)/100,date:String(s.dia).padStart(2,'0')+'/'+String(s.mes).padStart(2,'0')+'/'+MY,destaque:s.valor>50000,dep_maior:dep>s.valor};});
+            // SK_MENSAL: total de saques por mês
+            const skMensalTmp={};allSkRaw.forEach(s=>{if(!s.mes)return;const k=MY+'-'+String(s.mes).padStart(2,'0');skMensalTmp[k]=(skMensalTmp[k]||0)+s.valor;});
+            SK_MENSAL=skMensalTmp;}}}
 
       // CB: CashBack (acumulado por dia)
       const wsCbName=wb.SheetNames.find(n=>n.toLowerCase().includes('cash'));
