@@ -1842,10 +1842,10 @@ function importXL(ev){
       if(!rows.length){st.textContent='Nenhum dado válido!';st.className='imp-st er';return;}
 
       // D-1 definido pelo arquivo importado
-      const maxTs=Math.max(...rows.map(r=>r.date.getTime()));
+      const maxTs=rows.reduce((m,r)=>{const t=r.date.getTime();return t>m?t:m;},-Infinity);
       const maxDate=new Date(maxTs);maxDate.setHours(0,0,0,0);
       const MY=maxDate.getFullYear(),MM=maxDate.getMonth()+1;
-      const maxDayNum=Math.max(...rows.filter(r=>r.date.getFullYear()===MY&&r.date.getMonth()+1===MM).map(r=>r.date.getDate()));
+      const maxDayNum=rows.filter(r=>r.date.getFullYear()===MY&&r.date.getMonth()+1===MM).reduce((m,r)=>{const d=r.date.getDate();return d>m?d:m;},1);
       const yest=new Date(MY,MM-1,maxDayNum);
       const today=new Date(MY,MM-1,maxDayNum+1);
       const PM=MM===1?12:MM-1,PY=MM===1?MY-1:MY;
@@ -1903,7 +1903,7 @@ function importXL(ev){
       try{localStorage.setItem('dep_acc_cliM',JSON.stringify(accCliM));}catch(e){}
       // Reconstrói cliM a partir do accCliM
       const cliM={};
-      Object.entries(accCliM).forEach(([id,v])=>{const accVal=Object.values(v.days).reduce((s,x)=>s+x,0);const totalVal=v.seedVal+accVal;const dayNums=Object.keys(v.days).map(Number);const lastMs=dayNums.length>0?Math.max(v.seedMs,...dayNums.map(d=>new Date(MY,MM-1,d).getTime())):v.seedMs;if(lastMs>0)cliM[id]={date:new Date(lastMs),resp:v.resp,val:totalVal,cnt:Math.max(dayNums.length,1)};});
+      Object.entries(accCliM).forEach(([id,v])=>{const accVal=Object.values(v.days).reduce((s,x)=>s+x,0);const totalVal=v.seedVal+accVal;const dayNums=Object.keys(v.days).map(Number);const lastMs=dayNums.length>0?dayNums.reduce((m,d)=>{const t=new Date(MY,MM-1,d).getTime();return t>m?t:m;},v.seedMs):v.seedMs;if(lastMs>0)cliM[id]={date:new Date(lastMs),resp:v.resp,val:totalVal,cnt:Math.max(dayNums.length,1)};});
 
       const mayM={};rP.forEach(r=>{mayM[r.id]=(mayM[r.id]||0)+r.val;});
       const ds=d=>Math.round((yest-d)/864e5)+1;
