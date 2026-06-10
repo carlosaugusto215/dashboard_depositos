@@ -1055,17 +1055,20 @@ function renderYT(){
     return'<span style="display:inline-flex;font-size:10px;font-weight:500;padding:2px 8px;border-radius:99px;background:rgba(255,255,255,.06);color:var(--text3)">Padrão</span>';
   };
 
+  const cbMap=new Map(CB.map(c=>[String(c.external_id),c.cashback]));
+
   document.getElementById('yest-tbl').innerHTML=`<table>
-    <thead><tr><th>#</th><th>ID Cliente</th><th>Analista</th><th>Classificação</th><th style="text-align:right">Dep. Ontem</th><th style="text-align:center">Qtd dep.</th><th style="text-align:right">LTV</th></tr></thead>
-    <tbody>${sl.map((c,i)=>`<tr>
+    <thead><tr><th>#</th><th>ID Cliente</th><th>Analista</th><th>Classificação</th><th style="text-align:right">Dep. Ontem</th><th style="text-align:center">Qtd dep.</th><th style="text-align:right">Cashback</th><th style="text-align:right">LTV</th></tr></thead>
+    <tbody>${sl.map((c,i)=>{const cb=cbMap.get(String(c.external_id));return`<tr>
       <td style="color:var(--text3);font-size:11px">${(yestPg-1)*YPS+i+1}</td>
       <td>${cliN(c.external_id)}</td>
       <td style="color:var(--text2)">${c.analista}</td>
       <td>${classBadge(c.classificacao)}</td>
       <td style="text-align:right;color:var(--teal);font-weight:700;font-size:13px">${f(c.total_dia)}</td>
       <td style="text-align:center;color:var(--text2)">${c.qtd_dep}</td>
+      <td style="text-align:right;font-weight:600;color:${cb?'#a78bfa':'var(--text3)'}">${cb?f(cb):'—'}</td>
       <td style="text-align:right;color:var(--may);font-weight:600">${f(c.ltv)}</td>
-    </tr>`).join('')}</tbody>
+    </tr>`;})`+`</tbody>
   </table>`;
 
   let btns='';
