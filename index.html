@@ -1669,6 +1669,7 @@ async function publicarDados(btn){
     html=rep(html,'DEP_DIA',DEP_DIA);html=rep(html,'AJ',AJ);html=rep(html,'AM',AM);
     html=rep(html,'MO',MO);html=rep(html,'TJ',TJ);html=rep(html,'TM',TM);
     html=rep(html,'DD',DD);html=rep(html,'JD',JD);html=rep(html,'AL',AL);
+    html=html.replace(/id="imp-st">[^<]*<\/div>/,'id="imp-st">Dados: '+DD+'</div>');
     // Codifica de volta para base64 UTF-8
     const enc=btoa(new TextEncoder().encode(html).reduce((s,b)=>s+String.fromCharCode(b),''));
     st.textContent='Enviando para o GitHub…';
@@ -3222,6 +3223,7 @@ function renderGPTbl() {
 }
 function sGPPg(p) { gpPg = p; renderGPTbl(); }
 
+const _initMM=parseInt(DD.split('/')[1]);updateDaySelects(JD,_initMM);
 if(loadSnap()){applyF();}else{renderTB();renderOV();renderAN();renderCT();}
 checkSession();
 </script>
