@@ -1821,7 +1821,10 @@ function importXL(ev){
           if(chCli&&chTkt&&chMot&&chDia&&chGer){
             const newCH=rawCh.map(r=>({cliente_id:String(r[chCli]||'').trim(),ticket_id:String(r[chTkt]||'').trim(),motivo:String(r[chMot]||'').trim(),dia:parseInt(r[chDia]),gerente:String(r[chGer]||'').trim()})).filter(r=>r.cliente_id&&r.ticket_id&&!isNaN(r.dia));
             const newTkts=new Set(newCH.map(r=>r.ticket_id));
-            const savedCh=JSON.parse(localStorage.getItem('dep_acc_ch')||'[]');
+            const savedChStr=localStorage.getItem('dep_acc_ch');
+            let savedCh=savedChStr?JSON.parse(savedChStr):[];
+            // Mescla tickets históricos hardcoded que estejam faltando no acumulado
+            if(typeof CH!=='undefined'&&CH.length>0){const existingTkts=new Set(savedCh.map(r=>r.ticket_id));const missingHist=CH.filter(r=>!existingTkts.has(r.ticket_id)&&!newTkts.has(r.ticket_id));savedCh=[...savedCh,...missingHist];}
             const allCH=[...savedCh.filter(r=>!newTkts.has(r.ticket_id)),...newCH];
             try{localStorage.setItem('dep_acc_ch',JSON.stringify(allCH));}catch(e){}
             CH=allCH;}}}
