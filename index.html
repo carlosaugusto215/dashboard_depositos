@@ -1901,9 +1901,11 @@ function importXL(ev){
       const rP=allRowsPrev.filter(r=>r.date.getFullYear()===PY&&r.date.getMonth()+1===PM);
 
       // Linhas sintéticas do AN_DEP para dias ainda não acumulados em raw — preserva histórico hardcoded
+      // (não usadas quando o import cobre todos os dias 1..maxDayNum, para evitar dupla contagem)
       const accDiasSet=new Set(freshDeps.map(r=>r.dia));
+      const fullCoverage=Array.from({length:maxDayNum},(_,i)=>i+1).every(d=>accDiasSet.has(d));
       const synRows=[];
-      if(typeof AN_DEP==='object'){Object.entries(AN_DEP).forEach(([an,days])=>{Object.entries(days).forEach(([d,total])=>{if(!accDiasSet.has(parseInt(d)))synRows.push({id:'__s_'+an+'_'+d,date:new Date(MY,MM-1,parseInt(d)),val:total,resp:an});});});}
+      if(!fullCoverage&&typeof AN_DEP==='object'){Object.entries(AN_DEP).forEach(([an,days])=>{Object.entries(days).forEach(([d,total])=>{if(!accDiasSet.has(parseInt(d)))synRows.push({id:'__s_'+an+'_'+d,date:new Date(MY,MM-1,parseInt(d)),val:total,resp:an});});});}
       const rC_KPI=[...rC,...synRows]; // KPI/gráficos: inclui dias históricos do hardcoded
 
       // ltvM: seed do hardcoded CL/YC para preservar LTV histórico
@@ -1921,6 +1923,9 @@ function importXL(ev){
       // Remove dias do arquivo novo e re-adiciona do raw (evita duplicata no re-import)
       newDias.forEach(d=>{Object.values(accCliM).forEach(v=>{delete v.days[String(d)];});});
       rC.filter(r=>newDias.has(r.date.getDate())).forEach(r=>{const d=String(r.date.getDate());if(!accCliM[r.id])accCliM[r.id]={resp:r.resp,seedVal:0,seedMs:0,days:{}};accCliM[r.id].days[d]=(accCliM[r.id].days[d]||0)+r.val;});
+      // Se o import cobre todos os dias 1..maxDayNum, o seedVal hardcoded já está nas days → zerar para evitar dupla contagem
+      const allDaysCovered=Array.from({length:maxDayNum},(_,i)=>i+1).every(d=>newDias.has(d));
+      if(allDaysCovered){Object.values(accCliM).forEach(v=>{v.seedVal=0;v.seedMs=0;});}
       try{localStorage.setItem('dep_acc_cliM',JSON.stringify(accCliM));}catch(e){}
       // Reconstrói cliM a partir do accCliM
       const cliM={};
