@@ -1641,7 +1641,7 @@ function renderCarteira(){
   // gráficos Jan–Jun 2026 fixos
   const MONTHS=['2026-01','2026-02','2026-03','2026-04','2026-05','2026-06'];
   const M_LABELS=['Jan/26','Fev/26','Mar/26','Abr/26','Mai/26','Jun/26'];
-  const depByM=MONTHS.map(m=>MO.filter(r=>r.month===m&&analysts.includes(r.analyst)).reduce((s,r)=>s+r.value,0));
+  const depByM=MONTHS.map(m=>{const mo=MO.filter(r=>r.month===m);return(a?mo.filter(r=>analysts.includes(r.analyst)):mo).reduce((s,r)=>s+r.value,0);});
   const skByM={};SK.filter(r=>analysts.includes(r.analista)).forEach(r=>{const k=`2026-${String(r.mes).padStart(2,'0')}`;skByM[k]=(skByM[k]||0)+(r.valor||0);});
   const netByM=MONTHS.map((m,i)=>depByM[i]-(skByM[m]||0));
   const gdep=document.getElementById('cc-dep-chart');
@@ -1838,7 +1838,11 @@ function importXL(ev){
           const dia=parseInt(r[cDia]),ano=parseInt(r[cAno]),mes=parseInt(r[cMes]);
           if(!isNaN(dia)&&!isNaN(ano)&&!isNaN(mes)) date=new Date(ano,mes-1,dia);
         } else {
-          date=r[cD]?new Date(r[cD]):null;
+          const rv=r[cD];
+          if(!rv){date=null;}
+          else if(rv instanceof Date){date=rv;}
+          else if(typeof rv==='number'&&rv>40000){date=new Date(Math.round((rv-25569)*86400000));}
+          else{date=new Date(rv);}
         }
         return{id:String(r[cId]||'').trim(),date,val:parseFloat(String(r[cV]||'0').replace(',','.')),resp:String(r[cR]||'').trim(),excl:cE?parseFloat(r[cE]||0):0};
       }).filter(r=>r.id&&r.date&&!isNaN(r.date.getTime())&&!isNaN(r.val)&&r.excl!=1);
@@ -1958,10 +1962,15 @@ function importXL(ev){
       if(wsSkName){const rawSk=XLSX.utils.sheet_to_json(wb.Sheets[wsSkName],{raw:true,defval:null});
         if(rawSk.length){const ks=Object.keys(rawSk[0]);
           const[skId,skV,skDia,skMes,skAn,skCnt]=[fPri(ks,'external_id','id'),fPri(ks,'saque total','saquetotal'),fPri(ks,'dia','day'),fPri(ks,'mês','mes','month'),fPri(ks,'responsav','analista','gerente'),fPri(ks,'count_withdrawal','count','qtd')];
-          if(skId&&skV&&skDia&&skAn){const skMapNew={};
-            rawSk.forEach(r=>{const id=String(r[skId]||'').trim(),d=parseInt(r[skDia]),val=parseFloat(String(r[skV]||'0').replace(',','.'));if(!id||isNaN(d)||isNaN(val))return;
-              const an=String(r[skAn]||'').trim(),mes=skMes?parseInt(r[skMes]):MM,cnt=skCnt?parseInt(r[skCnt]||1):1;
-              const key=id+'|'+d;if(!skMapNew[key])skMapNew[key]={external_id:id,dia:d,mes,analista:an,valor:0,count_saque:0};
+          const skDateCol=!skDia?fPri(ks,'date','data','dt','datetime'):null;
+          if(skId&&skV&&skAn&&(skDia||skDateCol)){const skMapNew={};
+            rawSk.forEach(r=>{const id=String(r[skId]||'').trim(),val=parseFloat(String(r[skV]||'0').replace(',','.'));if(!id||isNaN(val))return;
+              let d,mes;
+              if(skDia){d=parseInt(r[skDia]);mes=skMes?parseInt(r[skMes]):MM;}
+              else{const rv=r[skDateCol];const sd=rv instanceof Date?rv:(typeof rv==='number'&&rv>40000?new Date(Math.round((rv-25569)*86400000)):new Date(rv));if(!sd||isNaN(sd.getTime()))return;d=sd.getDate();mes=sd.getMonth()+1;}
+              if(isNaN(d))return;
+              const an=String(r[skAn]||'').trim(),cnt=skCnt?parseInt(r[skCnt]||1):1;
+              const key=id+'|'+d+'|'+mes;if(!skMapNew[key])skMapNew[key]={external_id:id,dia:d,mes,analista:an,valor:0,count_saque:0};
               skMapNew[key].valor+=val;skMapNew[key].count_saque+=cnt;});
             const newSkRaw=Object.values(skMapNew);
             const skNewDias=new Set(newSkRaw.map(s=>s.dia));
