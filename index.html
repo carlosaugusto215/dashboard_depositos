@@ -1783,6 +1783,7 @@ async function publicarDados(btn){
     html=rep(html,'MO',MO);html=rep(html,'TJ',TJ);html=rep(html,'TM',TM);
     html=rep(html,'DD',DD);html=rep(html,'JD',JD);html=rep(html,'AL',AL);
     html=rep(html,'CLI_NAMES',CLI_NAMES);
+    html=rep(html,'CARTEIRA',CARTEIRA);
     html=html.replace(/id="imp-st">[^<]*<\/div>/,'id="imp-st">Dados: '+DD+'</div>');
     // Codifica de volta para base64 UTF-8
     const enc=btoa(new TextEncoder().encode(html).reduce((s,b)=>s+String.fromCharCode(b),''));
