@@ -2070,6 +2070,9 @@ function importXL(ev){
       const selAn=document.getElementById('g-an');
       selAn.innerHTML='<option value="">Todos os Analistas</option>'+AL.map(a=>`<option>${a}</option>`).join('');
       updateDaySelects(maxDayNum, MM);
+      // Limpa o filtro de período para mostrar todos os dias após o import
+      document.getElementById('g-dia-de').value='';
+      document.getElementById('g-dia-ate').value='';
 
       // APOIO: col A=ID, col B=Nome, col C=Responsável, col D=Classificação
       const wsApName=wb.SheetNames.find(n=>n.toLowerCase().includes('apoio'));
