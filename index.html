@@ -2192,16 +2192,19 @@ function renderSaques() {
 function renderSKKPIs() {
   const all = getSKAll();
   const total = all.reduce((s,r) => s + r.valor, 0);
+  const totalDep = all.reduce((s,r) => s + (r.dep_dia||0), 0);
+  const net = totalDep - total;
   const big = all.filter(r => r.destaque);
   const bigTotal = big.reduce((s,r) => s + r.valor, 0);
   const dias = [...new Set(all.map(r => r.dia))].length;
   const perDia = dias > 0 ? total / dias : 0;
+  const netColor = net >= 0 ? '#10b981' : '#f87171';
 
   document.getElementById('sk-kpis').innerHTML = `
     <div class="kc tl"><div class="kl">Total de saques</div><div class="kv" style="color:var(--teal)">${all.length}</div><div class="kf">${dias} dias · junho 2026</div></div>
     <div class="kc gn"><div class="kl">Volume total</div><div class="kv" style="color:var(--may)">${f(total)}</div><div class="kf">média ${f(perDia)}/dia</div></div>
     <div class="kc rd"><div class="kl">Saques acima R$50k</div><div class="kv" style="color:#f87171;cursor:pointer" onclick="setSKFilter(document.querySelector('#sk-filter-pills .pill:last-child'),'destaque')">${big.length}</div><div class="kf">vol. ${f(bigTotal)}</div></div>
-    <div class="kc am"><div class="kl">Maior saque</div><div class="kv" style="color:#fbbf24;font-size:18px;font-weight:600">${f(Math.max(...all.map(r => r.valor)))}</div><div class="kf">em um único registro</div></div>
+    <div class="kc" style="background:var(--bg2);border:1px solid var(--border)"><div class="kl">NET (Dep − Saque)</div><div class="kv" style="color:${netColor};font-size:18px;font-weight:600">${net>=0?'+':''}${f(net)}</div><div class="kf">dep ${f(totalDep)} · saque ${f(total)}</div></div>
   `;
 }
 
@@ -2234,9 +2237,10 @@ function renderSKDayBars() {
   const all = getSKAll();
   const byDay = {};
   all.forEach(r => {
-    if (!byDay[r.dia]) byDay[r.dia] = { count: 0, vol: 0, big: 0 };
+    if (!byDay[r.dia]) byDay[r.dia] = { count: 0, vol: 0, dep: 0, big: 0 };
     byDay[r.dia].count++;
     byDay[r.dia].vol += r.valor;
+    byDay[r.dia].dep += (r.dep_dia||0);
     if (r.destaque) byDay[r.dia].big++;
   });
   const days = Object.keys(byDay).map(Number).sort((a,b) => a-b);
@@ -2266,7 +2270,10 @@ function renderSKDayBars() {
           ${hasBig ? `<span style="color:#f87171;font-weight:700">⚠ ${info.big} acima 50k</span>` : ''}
         </div>
       </div>
-      <div style="width:60px;text-align:right;font-size:11.5px;font-weight:700;color:${hasBig?'#ef4444':barCol}">${f(info.vol)}</div>
+      <div style="text-align:right;min-width:64px">
+        <div style="font-size:11.5px;font-weight:700;color:${hasBig?'#ef4444':barCol}">${f(info.vol)}</div>
+        ${(()=>{const net=info.dep-info.vol;const nc=net>=0?'#10b981':'#f87171';return `<div style="font-size:9.5px;font-weight:600;color:${nc}">NET ${net>=0?'+':''}${f(net)}</div>`;})()}
+      </div>
       ${isActive?'<div style="font-size:9px;color:#60a5fa;font-weight:700">✓</div>':''}
     </div>`;
   }).join('');
@@ -2419,6 +2426,7 @@ function renderSKTbl() {
         <th>ID Cliente</th><th>Data</th><th>Dia</th>
         <th style="text-align:right">Valor Saque</th>
         <th style="text-align:right">Dep. mesmo dia</th>
+        <th style="text-align:right">NET</th>
         <th style="text-align:center">Qtd</th>
         <th>Analista</th><th>Status</th>
       </tr>
@@ -2447,6 +2455,7 @@ function renderSKTbl() {
               : `<span style="font-size:11px;color:var(--text3)">—</span>`
             }
           </td>
+          <td style="text-align:right">${(()=>{const net=(r.dep_dia||0)-r.valor;const nc=net>=0?'#10b981':'#f87171';return `<span style="font-size:12px;font-weight:700;color:${nc}">${net>=0?'+':''}${f(net)}</span>`;})()}</td>
           <td style="text-align:center;color:var(--text2)">${r.count_saque}</td>
           <td style="color:var(--text2)">${r.analista}</td>
           <td>${r.destaque
