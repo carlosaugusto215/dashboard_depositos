@@ -1160,7 +1160,7 @@ function renderOV(){
     <div class="kc am"><div class="kl">Meta Mensal</div><div class="kv" style="color:#fbbf24">${f(meta)}</div><div class="kb b-am">${pct}% atingido</div></div>
     <div class="kc tl"><div class="kl">Dep. Junho</div><div class="kv" style="color:var(--teal)">${f(jv)}</div><div class="kf">até ${DD.slice(0,5)} · excl. hoje</div></div>
     <div class="kc gn"><div class="kl">Dep. Maio</div><div class="kv" style="color:var(--may)">${f(a?(AM[a]||0):TM)}</div><div class="kf">mês completo</div></div>
-    <div class="kc rd"><div class="kl">Clientes em Alerta</div><div class="kv" style="cursor:pointer;color:#f87171" onclick="openD('Todos em alerta','2+ dias sem depositar',CL)">${d2.length+d3.length+d3p.length}</div><div class="kb b-rd">2+ dias sem dep.</div></div>`;
+    <div class="kc rd"><div class="kl">Clientes em Alerta</div><div class="kv" style="cursor:pointer;color:#f87171" onclick="openD('Todos em alerta','2+ dias sem depositar',gF())">${d2.length+d3.length+d3p.length}</div><div class="kb b-rd">2+ dias sem dep.</div></div>`;
 
   const al=a?[a]:AL;
   /* META BARS */
@@ -1190,7 +1190,7 @@ function renderOV(){
        backgroundColor:'#dc2626', hoverBackgroundColor:'#ef4444', borderRadius:3,borderSkipped:false}
     ]
   },options:{responsive:true,maintainAspectRatio:false,
-    onClick:(_,e)=>{if(!e.length)return;const cats=['2 dias','3 dias','+3 dias'];const an=al[e[0].index],ct=cats[e[0].datasetIndex];openD(ct+' — '+an,'',CL.filter(c=>c.analista===an&&c.categoria===ct));},
+    onClick:(_,e)=>{if(!e.length)return;const cats=['2 dias','3 dias','+3 dias'];const an=al[e[0].index],ct=cats[e[0].datasetIndex];openD(ct+' — '+an,'',gF().filter(c=>c.analista===an&&c.categoria===ct));},
     scales:{
       x:{stacked:true,ticks:{color:'#7c8fa8',font:{size:11,weight:'500'}},grid:{color:'rgba(255,255,255,.04)'}},
       y:{stacked:true,ticks:{color:'#7c8fa8',font:{size:11}},grid:{color:'rgba(255,255,255,.04)'}}
@@ -1207,7 +1207,7 @@ function renderOV(){
     labels:['2 dias','3 dias','+3 dias'],
     datasets:[{data:[d2.length,d3.length,d3p.length],backgroundColor:['#2563eb','#d97706','#dc2626'],borderWidth:0,hoverOffset:6}]
   },options:{responsive:true,maintainAspectRatio:false,cutout:'65%',
-    onClick:(_,e)=>{if(!e.length)return;const c=['2 dias','3 dias','+3 dias'][e[0].index];openD(c,'',CL.filter(x=>x.categoria===c));},
+    onClick:(_,e)=>{if(!e.length)return;const c=['2 dias','3 dias','+3 dias'][e[0].index];openD(c,'',gF().filter(x=>x.categoria===c));},
     plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+c.label+': '+c.parsed}}}}});
 
   document.getElementById('d-pills').innerHTML=[
@@ -1215,7 +1215,7 @@ function renderOV(){
     {cat:'3 dias',list:d3,bg:'#78350f',tc:'#fde68a',sub:'Sex 05/06'},
     {cat:'+3 dias',list:d3p,bg:'#7f1d1d',tc:'#fca5a5',sub:'> 3 dias'},
   ].map(x=>`<div style="background:${x.bg};border-radius:8px;padding:10px;cursor:pointer;text-align:center;border:1px solid rgba(255,255,255,.06)"
-    onclick="openD('${x.cat}','${x.sub}',CL.filter(c=>c.categoria==='${x.cat}'))">
+    onclick="openD('${x.cat}','${x.sub}',gF().filter(c=>c.categoria==='${x.cat}'))">
     <div style="font-size:9px;color:${x.tc};text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;font-weight:700">${x.cat}</div>
     <div style="font-size:24px;font-weight:700;color:#fff">${x.list.length}</div>
     <div style="font-size:9px;color:${x.tc};opacity:.7;margin-top:3px">ver lista</div>
@@ -1921,12 +1921,15 @@ function importXL(ev){
       selAn.innerHTML='<option value="">Todos os Analistas</option>'+AL.map(a=>`<option>${a}</option>`).join('');
       updateDaySelects(maxDayNum, MM);
 
-      // APOIO: mapa id → nome
+      // APOIO: mapa id → nome (col A = ID, col B = Nome)
       const wsApName=wb.SheetNames.find(n=>n.toLowerCase().includes('apoio'));
       if(wsApName){const rawAp=XLSX.utils.sheet_to_json(wb.Sheets[wsApName],{raw:true,defval:null});
         if(rawAp.length){const ks=Object.keys(rawAp[0]);
-          const[apId,apNm]=[fPri(ks,'plataforma','external_id','id externa','id'),fPri(ks,'nome','name','jogador','cliente','player')];
-          if(apId&&apNm){rawAp.forEach(r=>{const id=String(r[apId]||'').trim(),nm=(String(r[apNm]||'').trim().split(' ')[0]);if(id&&nm)CLI_NAMES[id]=nm;});
+          const apId=fPri(ks,'plataforma','external_id','id externa','id')||ks[0];
+          const apNm=fPri(ks,'nome','name','jogador','cliente','player')||ks[1];
+          console.log('[APOIO] colunas:',apId,apNm,'| linhas:',rawAp.length);
+          if(apId&&apNm){rawAp.forEach(r=>{const id=String(r[apId]||'').trim(),nm=String(r[apNm]||'').trim().split(' ')[0];if(id&&nm)CLI_NAMES[id]=nm;});
+            console.log('[APOIO] nomes carregados:',Object.keys(CLI_NAMES).length,'| ex:',Object.entries(CLI_NAMES).slice(0,3));
             try{localStorage.setItem('dep_cli_names',JSON.stringify(CLI_NAMES));}catch(e){}}}}
 
       applyF();
