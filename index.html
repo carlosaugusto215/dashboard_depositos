@@ -1593,11 +1593,34 @@ function updateDaySelects(maxDay, mm) {
   document.getElementById('g-dia-ate').innerHTML = ateOpts;
 }
 
+function saveSnap(maxDay, mm){
+  try{
+    const snap={CL,YC,SK,CB,CH,TN,GP,AN_DEP,AN_NET,DEP_DIA,AJ,AM,MO,TJ,TM,AL,JD,DD,maxDay,mm};
+    localStorage.setItem('dep_snap',JSON.stringify(snap));
+  }catch(e){}
+}
+
+function loadSnap(){
+  try{
+    const raw=localStorage.getItem('dep_snap');
+    if(!raw)return false;
+    const s=JSON.parse(raw);
+    CL=s.CL;YC=s.YC;SK=s.SK;CB=s.CB;CH=s.CH;TN=s.TN;GP=s.GP;
+    AN_DEP=s.AN_DEP;AN_NET=s.AN_NET;DEP_DIA=s.DEP_DIA;
+    AJ=s.AJ;AM=s.AM;MO=s.MO;TJ=s.TJ;TM=s.TM;AL=s.AL;JD=s.JD;DD=s.DD;
+    const selAn=document.getElementById('g-an');
+    selAn.innerHTML='<option value="">Todos os Analistas</option>'+AL.map(a=>`<option>${a}</option>`).join('');
+    updateDaySelects(s.maxDay, s.mm);
+    return true;
+  }catch(e){return false;}
+}
+
 function limparAcc(){
   if(!confirm('Limpar todo o histórico acumulado? Os dados voltarão ao estado hardcoded.'))return;
   ['deps','sk','cb','ch','prev_deps','prev_sk','prev_cb','prev_ch'].forEach(k=>localStorage.removeItem('dep_acc_'+k));
   localStorage.removeItem('dep_acc_cliM');
   localStorage.removeItem('dep_acc_month');
+  localStorage.removeItem('dep_snap');
   document.getElementById('imp-st').textContent='Acumulado limpo.';
 }
 
@@ -1828,6 +1851,7 @@ function importXL(ev){
       updateDaySelects(maxDayNum, MM);
 
       applyF();
+      saveSnap(maxDayNum, MM);
       const diasAcc=new Set(Object.values(nAN_DEP).flatMap(days=>Object.keys(days))).size||[...new Set(freshDeps.map(r=>r.dia))].length;
       st.textContent='✓ '+newCL.length+' clientes · '+SK.length+' saques · '+CB.length+' cashbacks · '+CH.length+' chamados · '+diasAcc+' dias acum. · Dados: '+DD;
       st.className='imp-st ok';
@@ -3137,7 +3161,7 @@ function renderGPTbl() {
 }
 function sGPPg(p) { gpPg = p; renderGPTbl(); }
 
-renderTB();renderOV();renderAN();renderCT();
+if(loadSnap()){applyF();}else{renderTB();renderOV();renderAN();renderCT();}
 checkSession();
 </script>
 </body>
