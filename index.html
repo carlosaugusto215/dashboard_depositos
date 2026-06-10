@@ -296,6 +296,9 @@ tr:last-child td{border-bottom:none}
     <div class="ni" onclick="goTo('grandesperdas',this)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>Grandes Perdas
     </div>
+    <div class="ni" onclick="goTo('carteira',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>Carteira de Clientes
+    </div>
     <div class="ni" onclick="goTo('analistas',this)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="7" r="4"/><path d="M2 21v-2a4 4 0 014-4h6a4 4 0 014 4v2"/><path d="M19 8l2 2-6 6"/></svg>Por Analista
     </div>
@@ -857,6 +860,32 @@ tr:last-child td{border-bottom:none}
     </div>
   </div>
 </div>
+
+<div class="pg" id="pg-carteira">
+  <div class="kg" id="cc-kpis"></div>
+  <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:14px;margin-bottom:16px">
+    <div class="card">
+      <div class="ch"><div class="ct">Depósito por mês</div><div class="cs">2026 · todos os meses</div></div>
+      <div class="cw" style="height:200px"><canvas id="cc-dep-chart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="ch"><div class="ct">NET por mês</div><div class="cs">Depósito − Saque · 2026</div></div>
+      <div class="cw" style="height:200px"><canvas id="cc-net-chart"></canvas></div>
+    </div>
+  </div>
+  <div class="card">
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+      <input type="text" class="si" placeholder="Buscar cliente ou responsável…" id="cc-s" oninput="renderCCTbl()" style="flex:1;min-width:160px">
+      <select class="sel" id="cc-so" onchange="renderCCTbl()">
+        <option value="dep">↓ Dep. Geral</option>
+        <option value="saque">↓ Saque Geral</option>
+        <option value="net">↓ NET Geral</option>
+      </select>
+    </div>
+    <div id="cc-tbl"></div>
+    <div id="cc-pag" style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;font-size:11px;color:var(--text3)"></div>
+  </div>
+</div>
 </main>
 
 <script>
@@ -987,6 +1016,7 @@ function cliN(id){
 function cliNm(id){return CLI_NAMES[String(id)]||String(id);}
 function applyF(){
   renderTB();renderOV();renderAN();renderCT();renderTR();
+  if(document.getElementById('pg-carteira').classList.contains('on'))renderCarteira();
   renderYKPIs();renderYT();
   renderChamados();
   renderSaques();
@@ -995,6 +1025,8 @@ function applyF(){
 /* ATIVOS ONTEM */
 let yestPg=1, yestAn='', yestClass='';
 const YPS=20;
+let ccPg=1;
+const CC_PS=20;
 
 function renderYKPIs(){
   const a=document.getElementById('g-an').value;
@@ -1587,14 +1619,74 @@ function renderTR(){
     plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+c.dataset.label+': '+f(c.parsed.y)}}}}});
 }
 
+/* CARTEIRA DE CLIENTES */
+function renderCarteira(){
+  const a=document.getElementById('g-an').value;
+  const analysts=a?[a]:AL;
+  const skMap={};
+  SK.filter(r=>analysts.includes(r.analista)).forEach(r=>{const id=String(r.external_id);skMap[id]=(skMap[id]||0)+(r.valor||0);});
+  const clients=CL.filter(c=>analysts.includes(c.analista));
+  const totalDep=clients.reduce((s,c)=>s+(c.total_jun||0),0);
+  const totalSaque=clients.reduce((s,c)=>s+(skMap[String(c.external_id)]||0),0);
+  const totalNet=totalDep-totalSaque;
+  document.getElementById('cc-kpis').innerHTML=`
+    <div class="kc"><div class="kl">Clientes</div><div class="kv">${clients.length}</div><div class="kf">carteira 2026</div></div>
+    <div class="kc tl"><div class="kl">Dep. 2026</div><div class="kv" style="color:var(--teal)">${f(totalDep)}</div><div class="kf">total junho</div></div>
+    <div class="kc rd"><div class="kl">Saque 2026</div><div class="kv" style="color:#f87171">${f(totalSaque)}</div><div class="kf">total junho</div></div>
+    <div class="kc ${totalNet>=0?'gn':'rd'}"><div class="kl">NET 2026</div><div class="kv" style="color:${totalNet>=0?'var(--ok)':'#f87171'}">${f(totalNet)}</div><div class="kf">dep − saque</div></div>`;
+  const months=[...new Set(MO.map(m=>m.month))].sort();
+  const mLabels=months.map(m=>{const[y,mo]=m.split('-');return['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][parseInt(mo)-1]+'/'+y.slice(2);});
+  const depByM=months.map(m=>MO.filter(r=>r.month===m&&analysts.includes(r.analyst)).reduce((s,r)=>s+r.value,0));
+  const skByM={};SK.filter(r=>analysts.includes(r.analista)).forEach(r=>{const k=`2026-${String(r.mes).padStart(2,'0')}`;skByM[k]=(skByM[k]||0)+(r.valor||0);});
+  const netByM=months.map((m,i)=>depByM[i]-(skByM[m]||0));
+  const gdep=document.getElementById('cc-dep-chart');
+  if(gdep._c)gdep._c.destroy();
+  gdep._c=new Chart(gdep,{type:'bar',data:{labels:mLabels,datasets:[{label:'Depósito',data:depByM,backgroundColor:'#2563eb',hoverBackgroundColor:'#3b82f6',borderRadius:6,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{color:'#7c8fa8',font:{size:11}},grid:{color:'rgba(255,255,255,.04)'}},y:{ticks:{color:'#7c8fa8',font:{size:10},callback:v=>f(v)},grid:{color:'rgba(255,255,255,.04)'}}},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+f(c.parsed.y)}}}}});
+  const gnet=document.getElementById('cc-net-chart');
+  if(gnet._c)gnet._c.destroy();
+  gnet._c=new Chart(gnet,{type:'bar',data:{labels:mLabels,datasets:[{label:'NET',data:netByM,backgroundColor:netByM.map(v=>v>=0?'#059669':'#dc2626'),hoverBackgroundColor:netByM.map(v=>v>=0?'#10b981':'#ef4444'),borderRadius:6,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{color:'#7c8fa8',font:{size:11}},grid:{color:'rgba(255,255,255,.04)'}},y:{ticks:{color:'#7c8fa8',font:{size:10},callback:v=>f(v)},grid:{color:'rgba(255,255,255,.04)'}}},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+f(c.parsed.y)}}}}});
+  renderCCTbl();
+}
+function renderCCTbl(){
+  const a=document.getElementById('g-an').value;
+  const analysts=a?[a]:AL;
+  const s=(document.getElementById('cc-s')?.value||'').toLowerCase();
+  const so=document.getElementById('cc-so')?.value||'dep';
+  const skMap={};
+  SK.filter(r=>analysts.includes(r.analista)).forEach(r=>{const id=String(r.external_id);skMap[id]=(skMap[id]||0)+(r.valor||0);});
+  let rows=CL.filter(c=>analysts.includes(c.analista)).map(c=>({id:c.external_id,analista:c.analista,dep:c.total_jun||0,saque:skMap[String(c.external_id)]||0,net:(c.total_jun||0)-(skMap[String(c.external_id)]||0)}));
+  if(s)rows=rows.filter(r=>String(r.id).includes(s)||r.analista.toLowerCase().includes(s)||(cliNm(r.id)||'').toLowerCase().includes(s));
+  const sortFn={dep:(a,b)=>b.dep-a.dep,saque:(a,b)=>b.saque-a.saque,net:(a,b)=>b.net-a.net};
+  rows.sort(sortFn[so]||sortFn.dep);
+  const tot=rows.length,pgs=Math.max(1,Math.ceil(tot/CC_PS));
+  if(ccPg>pgs)ccPg=1;
+  const sl=rows.slice((ccPg-1)*CC_PS,ccPg*CC_PS);
+  document.getElementById('cc-tbl').innerHTML=`<table>
+    <thead><tr><th>#</th><th>ID Cliente</th><th>Responsável</th><th style="text-align:right;cursor:pointer" onclick="document.getElementById('cc-so').value='dep';renderCCTbl()">Dep. Geral ↕</th><th style="text-align:right;cursor:pointer" onclick="document.getElementById('cc-so').value='saque';renderCCTbl()">Saque Geral ↕</th><th style="text-align:right;cursor:pointer" onclick="document.getElementById('cc-so').value='net';renderCCTbl()">NET Geral ↕</th></tr></thead>
+    <tbody>${sl.map((r,i)=>`<tr>
+      <td style="color:var(--text3);font-size:11px">${(ccPg-1)*CC_PS+i+1}</td>
+      <td>${cliN(r.id)}</td>
+      <td style="color:var(--text2)">${r.analista}</td>
+      <td style="text-align:right;color:var(--teal);font-weight:700">${f(r.dep)}</td>
+      <td style="text-align:right;color:#f87171;font-weight:600">${r.saque>0?f(r.saque):'—'}</td>
+      <td style="text-align:right;font-weight:700;color:${r.net>=0?'var(--ok)':'#f87171'}">${f(r.net)}</td>
+    </tr>`).join('')}</tbody>
+  </table>`;
+  let btns='';for(let i=1;i<=Math.min(pgs,7);i++)btns+=`<button class="pb${i===ccPg?' on':''}" onclick="sCCPg(${i})">${i}</button>`;
+  if(pgs>7)btns+=`<span style="color:var(--text3);padding:0 4px">…${pgs}</span>`;
+  document.getElementById('cc-pag').innerHTML=`<span>${(ccPg-1)*CC_PS+1}–${Math.min(ccPg*CC_PS,tot)} de ${tot} clientes</span><div class="pbr">${btns}</div>`;
+}
+function sCCPg(p){ccPg=p;renderCCTbl();}
+
 /* NAV */
 function goTo(id,el){
   document.querySelectorAll('.pg').forEach(p=>p.classList.remove('on'));
   document.querySelectorAll('.ni').forEach(n=>n.classList.remove('on'));
   document.getElementById('pg-'+id).classList.add('on');
   el.classList.add('on');
-  document.getElementById('tb-pg').textContent={overview:'Depósitos',ativos:'Ativos Ontem',chamados:'Chamados',saques:'Saques',cashback:'CashBack',torneios:'Torneios',grandesperdas:'Grandes Perdas',analistas:'Por Analista',clientes:'Clientes',tendencia:'Tendência'}[id];
+  document.getElementById('tb-pg').textContent={overview:'Depósitos',ativos:'Ativos Ontem',chamados:'Chamados',saques:'Saques',cashback:'CashBack',torneios:'Torneios',grandesperdas:'Grandes Perdas',carteira:'Carteira de Clientes',analistas:'Por Analista',clientes:'Clientes',tendencia:'Tendência'}[id];
   if(id==='grandesperdas'){renderGrandesPerdas();}
+  if(id==='carteira'){renderCarteira();}
   if(id==='torneios'){renderTorneios();}
   if(id==='cashback'){renderCashback();}
   if(id==='saques'){renderSaques();}
