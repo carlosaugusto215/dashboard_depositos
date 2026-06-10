@@ -943,6 +943,7 @@ let NET_DIA=[{"analista": "Gustavo Silva", "dia": 1, "net": 7516.78}, {"analista
 let TJ=7453151.710000001;
 let TM=30175325.26;
 let DD="09/06/2026";
+let CLI_NAMES={};
 const MT=50000000,MP=8333333,MD=31,PS=15;
 const META_DIA=1600000;
 let JD=9;
@@ -978,6 +979,12 @@ function gDiaLabel(){
   const ate=to!==null?(to<10?'0'+to:to)+'/06':'08/06';
   return `${de} → ${ate}`;
 }
+function cliN(id){
+  const nm=CLI_NAMES[String(id)];
+  if(!nm)return`<span class="mo">${id}</span>`;
+  return`<div style="line-height:1.3"><div style="font-size:12px;font-weight:600;color:var(--text)">${nm}</div><div style="font-size:10px;color:var(--text3);font-family:'JetBrains Mono',monospace">${id}</div></div>`;
+}
+function cliNm(id){return CLI_NAMES[String(id)]||String(id);}
 function applyF(){
   renderTB();renderOV();renderAN();renderCT();renderTR();
   renderYKPIs();renderYT();
@@ -1052,7 +1059,7 @@ function renderYT(){
     <thead><tr><th>#</th><th>ID Cliente</th><th>Analista</th><th>Classificação</th><th style="text-align:right">Dep. Ontem</th><th style="text-align:center">Qtd dep.</th><th style="text-align:right">LTV</th></tr></thead>
     <tbody>${sl.map((c,i)=>`<tr>
       <td style="color:var(--text3);font-size:11px">${(yestPg-1)*YPS+i+1}</td>
-      <td class="mo">${c.external_id}</td>
+      <td>${cliN(c.external_id)}</td>
       <td style="color:var(--text2)">${c.analista}</td>
       <td>${classBadge(c.classificacao)}</td>
       <td style="text-align:right;color:var(--teal);font-weight:700;font-size:13px">${f(c.total_dia)}</td>
@@ -1127,7 +1134,7 @@ function renderDL(){
   document.getElementById('d-cnt').textContent=r.length+' cliente(s)';
   document.getElementById('d-list').innerHTML=r.map(c=>`
     <div class="cro">
-      <div><div class="cid">${c.external_id}</div><div class="cmeta">${c.analista} · ${c.qtd_dep_jun} dep. jun.</div><div class="cdt">Último: ${c.ultimo_dep} · ${c.dias_sem_dep} dias</div></div>
+      <div><div class="cid">${cliNm(c.external_id)}</div><div style="font-size:10px;color:var(--text3);font-family:'JetBrains Mono',monospace;margin-bottom:1px">${c.external_id}</div><div class="cmeta">${c.analista} · ${c.qtd_dep_jun} dep. jun.</div><div class="cdt">Último: ${c.ultimo_dep} · ${c.dias_sem_dep} dias</div></div>
       <div class="crr"><div class="cvv">${f(c.total_jun)}</div><div class="cltv">LTV ${f(c.ltv)}</div></div>
     </div>`).join('');
 }
@@ -1416,7 +1423,7 @@ function selA(name){
   const top=CL.filter(c=>c.analista===name).sort((a,b)=>b.ltv-a.ltv).slice(0,8);
   document.getElementById('a-top').innerHTML=top.length?`<table>
     <thead><tr><th>ID</th><th>Último</th><th>Junho</th><th>LTV</th><th>Status</th></tr></thead>
-    <tbody>${top.map(c=>`<tr><td class="mo">${c.external_id}</td><td>${c.ultimo_dep}</td><td style="color:var(--text);font-weight:600">${f(c.total_jun)}</td><td style="color:var(--teal);font-weight:600">${f(c.ltv)}</td><td>${tag(c.categoria)}</td></tr>`).join('')}</tbody>
+    <tbody>${top.map(c=>`<tr><td>${cliN(c.external_id)}</td><td>${c.ultimo_dep}</td><td style="color:var(--text);font-weight:600">${f(c.total_jun)}</td><td style="color:var(--teal);font-weight:600">${f(c.ltv)}</td><td>${tag(c.categoria)}</td></tr>`).join('')}</tbody>
   </table>`:'<p style="color:var(--text3);font-size:12px;text-align:center;padding:28px 0">Sem alertas</p>';
 }
 
@@ -1426,7 +1433,7 @@ function renderCT(){
   const s=document.getElementById('cli-s').value.toLowerCase(),so=document.getElementById('cli-so').value;
   let data=gF();
   if(catF)data=data.filter(c=>c.categoria===catF);
-  if(s)data=data.filter(c=>c.external_id.toLowerCase().includes(s)||c.analista.toLowerCase().includes(s));
+  if(s)data=data.filter(c=>c.external_id.toLowerCase().includes(s)||c.analista.toLowerCase().includes(s)||(CLI_NAMES[c.external_id]||'').toLowerCase().includes(s));
   const sr={dias:(a,b)=>b.dias_sem_dep-a.dias_sem_dep,ltv:(a,b)=>b.ltv-a.ltv,jun:(a,b)=>b.total_jun-a.total_jun,may:(a,b)=>b.total_may-a.total_may};
   data=[...data].sort(sr[so]||sr.dias);
   const tot=data.length,pgs=Math.max(1,Math.ceil(tot/PS));
@@ -1435,7 +1442,7 @@ function renderCT(){
   document.getElementById('cli-tbl').innerHTML=`<table>
     <thead><tr><th>ID</th><th>Analista</th><th>Último dep.</th><th>Dias</th><th>Jun</th><th>Maio</th><th>LTV</th><th>Status</th></tr></thead>
     <tbody>${sl.map(c=>`<tr>
-      <td class="mo">${c.external_id}</td>
+      <td>${cliN(c.external_id)}</td>
       <td style="color:var(--text2)">${c.analista}</td>
       <td style="font-family:'JetBrains Mono',monospace;font-size:11px">${c.ultimo_dep}</td>
       <td style="text-align:center;font-weight:700;color:var(--text)">${c.dias_sem_dep}</td>
@@ -1605,7 +1612,7 @@ function updateDaySelects(maxDay, mm) {
 
 function saveSnap(maxDay, mm){
   try{
-    const snap={CL,YC,SK,CB,CH,TN,GP,AN_DEP,AN_NET,DEP_DIA,AJ,AM,MO,TJ,TM,AL,JD,DD,maxDay,mm};
+    const snap={CL,YC,SK,CB,CH,TN,GP,AN_DEP,AN_NET,DEP_DIA,AJ,AM,MO,TJ,TM,AL,JD,DD,CLI_NAMES,maxDay,mm};
     localStorage.setItem('dep_snap',JSON.stringify(snap));
   }catch(e){}
 }
@@ -1618,6 +1625,7 @@ function loadSnap(){
     CL=s.CL;YC=s.YC;SK=s.SK;CB=s.CB;CH=s.CH;TN=s.TN;GP=s.GP;
     AN_DEP=s.AN_DEP;AN_NET=s.AN_NET;DEP_DIA=s.DEP_DIA;
     AJ=s.AJ;AM=s.AM;MO=s.MO;TJ=s.TJ;TM=s.TM;AL=s.AL;JD=s.JD;DD=s.DD;
+    if(s.CLI_NAMES)CLI_NAMES=s.CLI_NAMES;
     const selAn=document.getElementById('g-an');
     selAn.innerHTML='<option value="">Todos os Analistas</option>'+AL.map(a=>`<option>${a}</option>`).join('');
     updateDaySelects(s.maxDay, s.mm);
@@ -1669,6 +1677,7 @@ async function publicarDados(btn){
     html=rep(html,'DEP_DIA',DEP_DIA);html=rep(html,'AJ',AJ);html=rep(html,'AM',AM);
     html=rep(html,'MO',MO);html=rep(html,'TJ',TJ);html=rep(html,'TM',TM);
     html=rep(html,'DD',DD);html=rep(html,'JD',JD);html=rep(html,'AL',AL);
+    html=rep(html,'CLI_NAMES',CLI_NAMES);
     html=html.replace(/id="imp-st">[^<]*<\/div>/,'id="imp-st">Dados: '+DD+'</div>');
     // Codifica de volta para base64 UTF-8
     const enc=btoa(new TextEncoder().encode(html).reduce((s,b)=>s+String.fromCharCode(b),''));
@@ -1912,6 +1921,14 @@ function importXL(ev){
       selAn.innerHTML='<option value="">Todos os Analistas</option>'+AL.map(a=>`<option>${a}</option>`).join('');
       updateDaySelects(maxDayNum, MM);
 
+      // APOIO: mapa id → nome
+      const wsApName=wb.SheetNames.find(n=>n.toLowerCase().includes('apoio'));
+      if(wsApName){const rawAp=XLSX.utils.sheet_to_json(wb.Sheets[wsApName],{raw:true,defval:null});
+        if(rawAp.length){const ks=Object.keys(rawAp[0]);
+          const[apId,apNm]=[fPri(ks,'external_id','id externa','id'),fPri(ks,'nome','name','jogador','cliente','player')];
+          if(apId&&apNm){rawAp.forEach(r=>{const id=String(r[apId]||'').trim(),nm=String(r[apNm]||'').trim();if(id&&nm)CLI_NAMES[id]=nm;});
+            try{localStorage.setItem('dep_cli_names',JSON.stringify(CLI_NAMES));}catch(e){}}}}
+
       applyF();
       saveSnap(maxDayNum, MM);
       const diasAcc=new Set(Object.values(nAN_DEP).flatMap(days=>Object.keys(days))).size||[...new Set(freshDeps.map(r=>r.dia))].length;
@@ -2137,7 +2154,7 @@ function renderChTbl() {
     <tbody>
       ${sl.map(c => `<tr>
         <td class="mo">#${c.ticket_id}</td>
-        <td class="mo">${c.cliente_id}</td>
+        <td>${cliN(c.cliente_id)}</td>
         <td style="color:var(--text);font-weight:600">${c.dia < 10 ? '0'+c.dia : c.dia}/06</td>
         <td style="color:var(--text2)">${String(c.hora).padStart(2,'0')}h</td>
         <td>${motivoBadge(c.motivo)}</td>
@@ -2224,7 +2241,7 @@ function renderSKAlert() {
         ${big.map(r => `
           <div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);border-radius:8px;padding:8px 14px;min-width:200px">
             <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:3px">
-              <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text);font-weight:700">${r.external_id}</span>
+              <span style="font-size:12px;color:var(--text);font-weight:700">${cliNm(r.external_id)}<span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text3);margin-left:5px">${r.external_id}</span></span>
               <span style="font-size:14px;font-weight:800;color:#ef4444">${f(r.valor)}</span>
             </div>
             <div style="font-size:10px;color:var(--text3)">${r.analista} · ${r.date}</div>
@@ -2445,7 +2462,7 @@ function renderSKTbl() {
               : 'background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.2);')
           : '';
         return `<tr style="${rowStyle}">
-          <td class="mo">${r.external_id}</td>
+          <td>${cliN(r.external_id)}</td>
           <td style="font-size:11px;color:var(--text2)">${r.date}</td>
           <td style="color:var(--text);font-weight:600">${r.dia<10?'0'+r.dia:r.dia}/06</td>
           <td style="text-align:right;font-weight:800;font-size:13px;color:${valColor}">${f(r.valor)}</td>
@@ -2594,7 +2611,7 @@ function renderCBTopCli() {
       <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
         <div style="display:flex;align-items:center;gap:6px">
           <span style="font-size:10px;font-weight:700;color:var(--text3);width:14px">${i+1}</span>
-          <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text);font-weight:600">${r.external_id}</span>
+          <span style="font-size:11px;color:var(--text);font-weight:600">${cliNm(r.external_id)}<span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--text3);margin-left:4px">${r.external_id}</span></span>
         </div>
         <div style="display:flex;align-items:center;gap:8px">
           ${r.dep_dia > 0 ? `<span style="font-size:10px;color:var(--may)">dep ${f(r.dep_dia)}</span>` : ''}
@@ -2711,7 +2728,7 @@ function renderCBTbl() {
     <tbody>
       ${sl.map((r, i) => `<tr>
         <td style="color:var(--text3);font-size:11px">${(cbPg-1)*CB_PS+i+1}</td>
-        <td class="mo">${r.external_id}</td>
+        <td>${cliN(r.external_id)}</td>
         <td style="color:var(--text2)">${r.analista}</td>
         <td style="text-align:right;font-weight:800;font-size:13px;color:#f59e0b">${f(r.cashback)}</td>
         <td style="text-align:right">${depCell(r.dep_dia, r.cashback)}</td>
@@ -2770,7 +2787,7 @@ function renderTNKPIs() {
     <div class="kc tl"><div class="kl">Torneios ativos</div><div class="kv" style="color:var(--teal)">${tots}</div><div class="kf">junho 2026</div></div>
     <div class="kc gn"><div class="kl">Total participantes</div><div class="kv" style="color:var(--may)">${allTN.length}</div><div class="kf">${parts} únicos</div></div>
     <div class="kc am"><div class="kl">Com score ativo</div><div class="kv" style="color:#fbbf24">${ativos}</div><div class="kf">${allTN.length - ativos} com score zero</div></div>
-    <div class="kc rd"><div class="kl">Maior score geral</div><div class="kv" style="color:#f87171;font-size:16px;font-weight:700">${topScore.score.toLocaleString('pt-BR')}</div><div class="kf">${topScore.external_id} · ${topScore.torneio}</div></div>
+    <div class="kc rd"><div class="kl">Maior score geral</div><div class="kv" style="color:#f87171;font-size:16px;font-weight:700">${topScore.score.toLocaleString('pt-BR')}</div><div class="kf">${cliNm(topScore.external_id)} · ${topScore.torneio}</div></div>
   `;
 }
 
@@ -2831,7 +2848,8 @@ function renderTNPodio() {
         return `<div style="background:${podiumBgs[i]};border:1px solid ${podiumColors[i]}44;border-radius:${isGold?'16px':'12px'};padding:${isGold?'20px 16px':'16px 14px'};text-align:center;position:relative">
           <div style="font-size:${isGold?'32px':'24px'};margin-bottom:6px">${medals[i]}</div>
           <div style="font-size:10px;font-weight:700;color:${podiumColors[i]};letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px">${i===0?'1º Lugar':i===1?'2º Lugar':'3º Lugar'}</div>
-          <div style="font-family:'JetBrains Mono',monospace;font-size:${isGold?'14px':'12px'};font-weight:700;color:var(--text);margin-bottom:4px">${r.external_id}</div>
+          <div style="font-size:${isGold?'14px':'12px'};font-weight:700;color:var(--text);margin-bottom:2px">${cliNm(r.external_id)}</div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--text3);margin-bottom:2px">${r.external_id}</div>
           <div style="font-size:11px;color:var(--text2);margin-bottom:6px">${r.analista.split(' ')[0]}</div>
           <div style="font-size:${isGold?'18px':'15px'};font-weight:800;color:${podiumColors[i]}">${r.score.toLocaleString('pt-BR')}</div>
           <div style="font-size:10px;color:var(--text3);margin-top:2px">pontos</div>
@@ -2873,7 +2891,7 @@ function renderTNTable() {
         <td style="font-weight:800;font-size:13px;color:${posColor(r.posicao)};text-align:center">
           ${medalIcon(r.posicao)|| `<span style="font-size:12px">${r.posicao}º</span>`}
         </td>
-        <td class="mo">${r.external_id}</td>
+        <td>${cliN(r.external_id)}</td>
         <td style="color:var(--text2);font-size:12px">${r.analista}</td>
         <td style="text-align:right;font-weight:700;font-size:13px;color:${r.ativo?barCol:'var(--text3)'}">${r.score.toLocaleString('pt-BR')}</td>
         <td>
@@ -2981,8 +2999,8 @@ function renderGPKPIs() {
   document.getElementById('gp-kpis').innerHTML = `
     <div class="kc tl"><div class="kl">Registros analisados</div><div class="kv" style="color:var(--teal)">${all.length}</div><div class="kf">${[...new Set(all.map(r=>r.dia))].length} dias</div></div>
     <div class="kc rd"><div class="kl">Clientes com NET negativo</div><div class="kv" style="color:#f87171">${losses.length}</div><div class="kf">total perdas: ${f(Math.abs(totalNetLoss))}</div></div>
-    <div class="kc am"><div class="kl">Maior perda individual</div><div class="kv" style="color:#ef4444;font-size:18px;font-weight:700">${f(Math.abs(biggestLoss.net))}</div><div class="kf">${biggestLoss.external_id}</div></div>
-    <div class="kc gn"><div class="kl">Maior ganho individual</div><div class="kv" style="color:var(--may);font-size:18px;font-weight:700">${f(biggestGain.net)}</div><div class="kf">${biggestGain.external_id}</div></div>
+    <div class="kc am"><div class="kl">Maior perda individual</div><div class="kv" style="color:#ef4444;font-size:18px;font-weight:700">${f(Math.abs(biggestLoss.net))}</div><div class="kf">${cliNm(biggestLoss.external_id)}</div></div>
+    <div class="kc gn"><div class="kl">Maior ganho individual</div><div class="kv" style="color:var(--may);font-size:18px;font-weight:700">${f(biggestGain.net)}</div><div class="kf">${cliNm(biggestGain.external_id)}</div></div>
   `;
 }
 
@@ -3083,7 +3101,7 @@ function renderGPTopLosses() {
           <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
             <div style="display:flex;align-items:center;gap:7px">
               <span style="font-size:10px;font-weight:700;color:var(--text3);width:16px">${i+1}</span>
-              <span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--text);font-weight:600">${r.external_id}</span>
+              <span style="font-size:11.5px;color:var(--text);font-weight:600">${cliNm(r.external_id)}<span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--text3);margin-left:4px">${r.external_id}</span></span>
               <span style="font-size:10px;color:var(--text3)">dia ${r.dia}/06</span>
             </div>
             <span style="font-size:13px;font-weight:800;color:${tierCol}">+${f(r.net)}</span>
@@ -3215,7 +3233,7 @@ function renderGPTbl() {
         : Math.abs(r.net) >= 5000  ? 'background:rgba(245,158,11,.04);' : ''
         : '';
       return `<tr style="${rowBg}">
-        <td class="mo">${r.external_id}</td>
+        <td>${cliN(r.external_id)}</td>
         <td style="color:var(--text);font-weight:600">${r.dia<10?'0'+r.dia:r.dia}/06</td>
         <td style="color:var(--text2)">${r.analista}</td>
         <td style="text-align:right;color:var(--may);font-weight:600">${f(r.dep)}</td>
@@ -3232,6 +3250,7 @@ function renderGPTbl() {
 }
 function sGPPg(p) { gpPg = p; renderGPTbl(); }
 
+try{const _cn=localStorage.getItem('dep_cli_names');if(_cn)CLI_NAMES=JSON.parse(_cn);}catch(e){}
 const _initMM=parseInt(DD.split('/')[1]);updateDaySelects(JD,_initMM);
 if(loadSnap()){applyF();}else{renderTB();renderOV();renderAN();renderCT();}
 checkSession();
