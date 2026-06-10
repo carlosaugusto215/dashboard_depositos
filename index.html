@@ -1028,6 +1028,7 @@ let yestPg=1, yestAn='', yestClass='';
 const YPS=20;
 let ccPg=1;
 const CC_PS=20;
+let DEP_ANO={};
 
 function renderYKPIs(){
   const a=document.getElementById('g-an').value;
@@ -1626,8 +1627,8 @@ function renderCarteira(){
   const analysts=a?[a]:AL;
   // usa CARTEIRA (APOIO) se disponível, fallback CL
   const base=CARTEIRA.length>0?CARTEIRA.filter(c=>!a||c.analista===a):CL.filter(c=>analysts.includes(c.analista)).map(c=>({id:c.external_id,analista:c.analista,classificacao:c.categoria}));
-  // mapas financeiros
-  const clMap={};CL.forEach(c=>{clMap[String(c.external_id)]=(c.total_jun||0);});
+  // mapas financeiros — usa DEP_ANO (anual) se disponível, fallback total_jun
+  const clMap={};if(Object.keys(DEP_ANO).length>0){Object.entries(DEP_ANO).forEach(([id,v])=>clMap[id]=Math.round(v));}else{CL.forEach(c=>{clMap[String(c.external_id)]=Math.round(c.total_jun||0);});}
   const skMap={};SK.filter(r=>analysts.includes(r.analista)).forEach(r=>{const id=String(r.external_id);skMap[id]=(skMap[id]||0)+(r.valor||0);});
   const totalDep=base.reduce((s,c)=>s+(clMap[String(c.id)]||0),0);
   const totalSaque=base.reduce((s,c)=>s+(skMap[String(c.id)]||0),0);
@@ -1657,7 +1658,7 @@ function renderCCTbl(){
   const s=(document.getElementById('cc-s')?.value||'').toLowerCase();
   const so=document.getElementById('cc-so')?.value||'dep';
   const base=CARTEIRA.length>0?CARTEIRA.filter(c=>!a||c.analista===a):CL.filter(c=>analysts.includes(c.analista)).map(c=>({id:c.external_id,analista:c.analista,classificacao:c.categoria}));
-  const clMap={};CL.forEach(c=>{clMap[String(c.external_id)]=(c.total_jun||0);});
+  const clMap={};if(Object.keys(DEP_ANO).length>0){Object.entries(DEP_ANO).forEach(([id,v])=>clMap[id]=Math.round(v));}else{CL.forEach(c=>{clMap[String(c.external_id)]=Math.round(c.total_jun||0);});}
   const skMap={};SK.filter(r=>analysts.includes(r.analista)).forEach(r=>{const id=String(r.external_id);skMap[id]=(skMap[id]||0)+(r.valor||0);});
   let rows=base.map(c=>({id:c.id,analista:c.analista,classificacao:c.classificacao||'—',dep:clMap[String(c.id)]||0,saque:skMap[String(c.id)]||0,net:(clMap[String(c.id)]||0)-(skMap[String(c.id)]||0)}));
   if(s)rows=rows.filter(r=>String(r.id).includes(s)||r.analista.toLowerCase().includes(s)||(cliNm(r.id)||'').toLowerCase().includes(s));
@@ -1716,7 +1717,7 @@ function updateDaySelects(maxDay, mm) {
 
 function saveSnap(maxDay, mm){
   try{
-    const snap={CL,YC,SK,CB,CH,TN,GP,AN_DEP,AN_NET,DEP_DIA,AJ,AM,MO,TJ,TM,AL,JD,DD,CLI_NAMES,CARTEIRA,maxDay,mm};
+    const snap={CL,YC,SK,CB,CH,TN,GP,AN_DEP,AN_NET,DEP_DIA,AJ,AM,MO,TJ,TM,AL,JD,DD,CLI_NAMES,CARTEIRA,DEP_ANO,maxDay,mm};
     localStorage.setItem('dep_snap',JSON.stringify(snap));
   }catch(e){}
 }
@@ -1731,6 +1732,7 @@ function loadSnap(){
     AJ=s.AJ;AM=s.AM;MO=s.MO;TJ=s.TJ;TM=s.TM;AL=s.AL;JD=s.JD;DD=s.DD;
     if(s.CLI_NAMES)CLI_NAMES=s.CLI_NAMES;
     if(s.CARTEIRA)CARTEIRA=s.CARTEIRA;
+    if(s.DEP_ANO)DEP_ANO=s.DEP_ANO;
     const selAn=document.getElementById('g-an');
     selAn.innerHTML='<option value="">Todos os Analistas</option>'+AL.map(a=>`<option>${a}</option>`).join('');
     updateDaySelects(s.maxDay, s.mm);
@@ -1784,6 +1786,7 @@ async function publicarDados(btn){
     html=rep(html,'DD',DD);html=rep(html,'JD',JD);html=rep(html,'AL',AL);
     html=rep(html,'CLI_NAMES',CLI_NAMES);
     html=rep(html,'CARTEIRA',CARTEIRA);
+    html=rep(html,'DEP_ANO',DEP_ANO);
     html=html.replace(/id="imp-st">[^<]*<\/div>/,'id="imp-st">Dados: '+DD+'</div>');
     // Codifica de volta para base64 UTF-8
     const enc=btoa(new TextEncoder().encode(html).reduce((s,b)=>s+String.fromCharCode(b),''));
@@ -1921,9 +1924,18 @@ function importXL(ev){
       rC_KPI.forEach(r=>{const d=r.date.getDate(),an=r.resp;if(!nAN_DEP[an])nAN_DEP[an]={};nAN_DEP[an][String(d)]=(nAN_DEP[an][String(d)]||0)+r.val;});
       Object.entries(nAN_DEP).forEach(([an,days])=>Object.entries(days).forEach(([d,dep])=>nDEP_DIA.push({analista:an,dia:parseInt(d),dep:Math.round(dep*100)/100})));
 
-      // MO (tendência mensal) — usa rC_KPI + mês anterior
-      const moMap={};[...rC_KPI,...allRowsPrev].forEach(r=>{const k=r.date.getFullYear()+'-'+String(r.date.getMonth()+1).padStart(2,'0');if(!moMap[k])moMap[k]={};moMap[k][r.resp]=(moMap[k][r.resp]||0)+r.val;});
+      // MO (tendência mensal) — todos os meses do arquivo + rC_KPI para mês atual
+      const moMap={};
+      // Meses anteriores: usa rows diretamente (arquivo pode ter o ano todo)
+      rows.filter(r=>!(r.date.getFullYear()===MY&&r.date.getMonth()+1===MM)).forEach(r=>{const k=r.date.getFullYear()+'-'+String(r.date.getMonth()+1).padStart(2,'0');if(!moMap[k])moMap[k]={};moMap[k][r.resp]=(moMap[k][r.resp]||0)+r.val;});
+      // Se arquivo não tem o mês anterior, complementa com acumulado salvo
+      if(!rows.some(r=>r.date.getFullYear()===PY&&r.date.getMonth()+1===PM)){allRowsPrev.forEach(r=>{const k=r.date.getFullYear()+'-'+String(r.date.getMonth()+1).padStart(2,'0');if(!moMap[k])moMap[k]={};moMap[k][r.resp]=(moMap[k][r.resp]||0)+r.val;});}
+      // Mês atual via rC_KPI (inclui dias históricos hardcoded)
+      rC_KPI.forEach(r=>{const k=r.date.getFullYear()+'-'+String(r.date.getMonth()+1).padStart(2,'0');if(!moMap[k])moMap[k]={};moMap[k][r.resp]=(moMap[k][r.resp]||0)+r.val;});
       const nMO=[];Object.entries(moMap).forEach(([mo,ans])=>Object.entries(ans).forEach(([an,v])=>nMO.push({month:mo,analyst:an,value:Math.round(v)})));
+      // DEP_ANO: total anual por cliente (usado na tabela Carteira)
+      const depAnoTmp={};rows.filter(r=>r.date.getFullYear()===MY).forEach(r=>{depAnoTmp[r.id]=(depAnoTmp[r.id]||0)+r.val;});
+      DEP_ANO=depAnoTmp;
 
       CL=newCL;MO=nMO;AJ=nAJ;AM=nAM;
       TJ=Object.values(nAJ).reduce((s,v)=>s+v,0);
