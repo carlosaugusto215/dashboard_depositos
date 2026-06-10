@@ -1925,14 +1925,15 @@ function importXL(ev){
       const wsApName=wb.SheetNames.find(n=>n.toLowerCase().includes('apoio'));
       if(wsApName){const rawAp=XLSX.utils.sheet_to_json(wb.Sheets[wsApName],{raw:true,defval:null});
         if(rawAp.length){const ks=Object.keys(rawAp[0]);
-          const[apId,apNm]=[fPri(ks,'external_id','id externa','id'),fPri(ks,'nome','name','jogador','cliente','player')];
-          if(apId&&apNm){rawAp.forEach(r=>{const id=String(r[apId]||'').trim(),nm=String(r[apNm]||'').trim();if(id&&nm)CLI_NAMES[id]=nm;});
+          const[apId,apNm]=[fPri(ks,'plataforma','external_id','id externa','id'),fPri(ks,'nome','name','jogador','cliente','player')];
+          if(apId&&apNm){rawAp.forEach(r=>{const id=String(r[apId]||'').trim(),nm=(String(r[apNm]||'').trim().split(' ')[0]);if(id&&nm)CLI_NAMES[id]=nm;});
             try{localStorage.setItem('dep_cli_names',JSON.stringify(CLI_NAMES));}catch(e){}}}}
 
       applyF();
       saveSnap(maxDayNum, MM);
       const diasAcc=new Set(Object.values(nAN_DEP).flatMap(days=>Object.keys(days))).size||[...new Set(freshDeps.map(r=>r.dia))].length;
-      st.textContent='✓ '+newCL.length+' clientes · '+SK.length+' saques · '+CB.length+' cashbacks · '+CH.length+' chamados · '+diasAcc+' dias acum. · Dados: '+DD;
+      const nNomes=Object.keys(CLI_NAMES).length;
+      st.textContent='✓ '+newCL.length+' clientes · '+SK.length+' saques · '+CB.length+' cashbacks · '+CH.length+' chamados · '+diasAcc+' dias acum. · '+nNomes+' nomes · Dados: '+DD;
       st.className='imp-st ok';
       ev.target.value='';
     }catch(err){st.textContent='Erro: '+err.message;st.className='imp-st er';console.error(err);}
