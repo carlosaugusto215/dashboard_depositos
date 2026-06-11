@@ -2709,7 +2709,7 @@ function renderCBKPIs() {
   const avg      = all.length ? totalCB / all.length : 0;
   const ratio    = totalDep > 0 ? (totalCB / totalDep * 100) : 0;
 
-  const cbDate = CB.find(r=>r.data_cb)?.data_cb || (CB[0]?String(CB[0].dia).padStart(2,'0')+'/'+String(CB[0].mes||6).padStart(2,'0')+'/2026':'—');
+  const cbDate = CB.length>0?String(CB[0].dia).padStart(2,'0')+'/'+String(CB[0].mes||6).padStart(2,'0')+'/2026':'—';
   document.getElementById('cb-kpis').innerHTML = `
     <div class="kc tl"><div class="kl">Clientes com cashback</div><div class="kv" style="color:var(--teal)">${all.length}</div><div class="kf">${cbDate}</div></div>
     <div class="kc gn"><div class="kl">Total cashback</div><div class="kv" style="color:var(--may)">${f(totalCB)}</div><div class="kf">média ${f(avg)}/cliente</div></div>
@@ -2901,7 +2901,7 @@ function renderCBTbl() {
     </div>`;
   };
 
-  const cbDateTbl = CB.find(r=>r.data_cb)?.data_cb || '';
+  const cbDateTbl = CB.length>0?String(CB[0].dia).padStart(2,'0')+'/'+String(CB[0].mes||6).padStart(2,'0')+'/2026':'';
   const tblTitle = document.getElementById('cb-tbl-title');
   if(tblTitle) tblTitle.textContent = cbDateTbl ? `Cashback do dia ${cbDateTbl}` : 'Todos os clientes com cashback';
   document.getElementById('cb-tbl').innerHTML = `<table>
@@ -2938,11 +2938,11 @@ function sCBPg(p) { cbPg = p; renderCBTbl(); }
 let tnTorneio = null, tnPg = 1, tnActive = 'all';
 const TN_PS = 20;
 const TN_PAL = ['#f59e0b','#94a3b8','#b45309','#2563eb','#10b981','#8b5cf6'];
-const TORNEIO_LIST = [...new Set(TN.map(r => r.torneio))];
+function tnList() { return [...new Set(TN.map(r => r.torneio))]; }
 
 function getTNFiltered() {
   const a  = document.getElementById('g-an').value;
-  const t  = tnTorneio || TORNEIO_LIST[0];
+  const t  = tnTorneio || tnList()[0];
   let d = TN.filter(r => r.torneio === t);
   if (a) d = d.filter(r => r.analista === a);
   if (tnActive === 'ativo') d = d.filter(r => r.ativo);
@@ -2951,12 +2951,13 @@ function getTNFiltered() {
 }
 
 function getTNCurrent() {
-  const t = tnTorneio || TORNEIO_LIST[0];
+  const t = tnTorneio || tnList()[0];
   return TN.filter(r => r.torneio === t);
 }
 
 function renderTorneios() {
-  if (!tnTorneio) tnTorneio = TORNEIO_LIST[0];
+  const list = tnList();
+  if (!tnTorneio || !list.includes(tnTorneio)) tnTorneio = list[0];
   renderTNKPIs();
   renderTNPills();
   renderTNPodio();
@@ -2967,7 +2968,7 @@ function renderTorneios() {
 function renderTNKPIs() {
   const a = document.getElementById('g-an').value;
   const allTN = a ? TN.filter(r => r.analista === a) : TN;
-  const tots  = TORNEIO_LIST.length;
+  const tots  = tnList().length;
   const parts = [...new Set(allTN.map(r => r.external_id))].length;
   const ativos = allTN.filter(r => r.ativo).length;
   const topScore = allTN.reduce((m,r) => r.score > m.score ? r : m, {score:0, external_id:'—', torneio:'—'});
@@ -2981,7 +2982,7 @@ function renderTNKPIs() {
 }
 
 function renderTNPills() {
-  document.getElementById('tn-pills').innerHTML = TORNEIO_LIST.map(t => {
+  document.getElementById('tn-pills').innerHTML = tnList().map(t => {
     const isOn = t === tnTorneio;
     const count = TN.filter(r => r.torneio === t).length;
     return `<div class="pill${isOn?' on':''}" onclick="setTNTorneio('${t.replace(/'/g,"\\'")}',this)" style="font-size:11.5px">
