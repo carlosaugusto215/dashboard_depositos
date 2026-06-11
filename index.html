@@ -1968,6 +1968,8 @@ function importXL(ev){
       const moMensalTmp={};
       rows.filter(r=>!(r.date.getFullYear()===MY&&r.date.getMonth()+1===MM)).forEach(r=>{const k=r.date.getFullYear()+'-'+String(r.date.getMonth()+1).padStart(2,'0');moMensalTmp[k]=(moMensalTmp[k]||0)+r.val;});
       rC_KPI.forEach(r=>{const k=r.date.getFullYear()+'-'+String(r.date.getMonth()+1).padStart(2,'0');moMensalTmp[k]=(moMensalTmp[k]||0)+r.val;});
+      // Preserva meses não cobertos por este import (mantém Jan-Mai após import diário de Junho)
+      Object.entries(MO_MENSAL).forEach(([k,v])=>{if(!moMensalTmp.hasOwnProperty(k))moMensalTmp[k]=v;});
       MO_MENSAL=moMensalTmp;
 
       CL=newCL;MO=nMO;AJ=nAJ;AM=nAM;
@@ -2002,14 +2004,15 @@ function importXL(ev){
               const key=id+'|'+d+'|'+mes;if(!skMapNew[key])skMapNew[key]={external_id:id,dia:d,mes,analista:an,valor:0,count_saque:0};
               skMapNew[key].valor+=val;skMapNew[key].count_saque+=cnt;});
             const newSkRaw=Object.values(skMapNew);
-            const skNewDias=new Set(newSkRaw.map(s=>s.dia));
+            const skNewDias=new Set(newSkRaw.map(s=>s.dia+'|'+s.mes));
             const savedSkRawStr=localStorage.getItem('dep_acc_sk');
-            let savedSkRaw=savedSkRawStr?JSON.parse(savedSkRawStr):null;
-            if(savedSkRaw===null&&typeof SK!=='undefined'&&SK.length>0){
-              savedSkRaw=SK.filter(s=>!skNewDias.has(s.dia)).map(s=>({external_id:s.external_id,dia:s.dia,mes:s.mes||MM,analista:s.analista,valor:s.valor,count_saque:s.count_saque||1,dep_dia:s.dep_dia||0}));
+            let savedSkRaw=savedSkRawStr?JSON.parse(savedSkRawStr):[];
+            // Sempre complementa com SK hardcoded para entradas ausentes no localStorage (preserva meses anteriores)
+            if(typeof SK!=='undefined'&&SK.length>0){
+              const savedKeys=new Set(savedSkRaw.map(s=>s.external_id+'|'+s.dia+'|'+(s.mes||MM)));
+              SK.forEach(s=>{const key=s.external_id+'|'+s.dia+'|'+(s.mes||MM);const dk=s.dia+'|'+(s.mes||MM);if(!savedKeys.has(key)&&!skNewDias.has(dk)){savedSkRaw.push({external_id:s.external_id,dia:s.dia,mes:s.mes||MM,analista:s.analista,valor:s.valor,count_saque:s.count_saque||1,dep_dia:s.dep_dia||0});}});
             }
-            savedSkRaw=savedSkRaw||[];
-            const allSkRaw=[...savedSkRaw.filter(s=>!skNewDias.has(s.dia)),...newSkRaw];
+            const allSkRaw=[...savedSkRaw.filter(s=>!skNewDias.has(s.dia+'|'+(s.mes||MM))),...newSkRaw];
             try{localStorage.setItem('dep_acc_sk',JSON.stringify(allSkRaw));}catch(e){}
             SK=allSkRaw.map(s=>{const dep=newDias.has(s.dia)?(depByIdDay[s.external_id]?.[s.dia]||0):(s.dep_dia||0);
               return{...s,valor:Math.round(s.valor*100)/100,dep_dia:Math.round(dep*100)/100,date:String(s.dia).padStart(2,'0')+'/'+String(s.mes).padStart(2,'0')+'/'+MY,destaque:s.valor>50000,dep_maior:dep>s.valor};});
