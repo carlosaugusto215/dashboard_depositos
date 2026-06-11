@@ -2040,16 +2040,9 @@ function importXL(ev){
               const an=String(r[cbAn]||'').trim(),d=cbDia?parseInt(r[cbDia]):maxDayNum,mes=cbMes?parseInt(r[cbMes]):MM;
               return{external_id:id,cashback:Math.round(val*100)/100,dia:d,mes,analista:an};
             }).filter(r=>r.external_id&&!isNaN(r.cashback));
-            const cbNewDias=new Set(newCbRaw.map(r=>r.dia));
-            const savedCbRawStr=localStorage.getItem('dep_acc_cb');
-            let savedCbRaw=savedCbRawStr?JSON.parse(savedCbRawStr):null;
-            if(savedCbRaw===null&&typeof CB!=='undefined'&&CB.length>0){
-              savedCbRaw=CB.filter(r=>!cbNewDias.has(r.dia)).map(r=>({external_id:r.external_id,cashback:r.cashback,dia:r.dia,mes:r.mes||MM,analista:r.analista,dep_dia:r.dep_dia||0}));
-            }
-            savedCbRaw=savedCbRaw||[];
-            const allCbRaw=[...savedCbRaw.filter(r=>!cbNewDias.has(r.dia)),...newCbRaw];
-            try{localStorage.setItem('dep_acc_cb',JSON.stringify(allCbRaw));}catch(e){}
-            CB=allCbRaw.map(r=>{const dep=newDias.has(r.dia)?(depByIdDay[r.external_id]?.[r.dia]||0):(r.dep_dia||0);
+            // CB: substituição direta — sem acumulação, usa apenas o arquivo do dia importado
+            try{localStorage.setItem('dep_acc_cb',JSON.stringify(newCbRaw));}catch(e){}
+            CB=newCbRaw.map(r=>{const dep=newDias.has(r.dia)?(depByIdDay[r.external_id]?.[r.dia]||0):0;
               return{...r,dep_dia:Math.round(dep*100)/100,ltv:Math.round((ltvM[r.external_id]||0)*100)/100,faixa:fxa(r.cashback)};});}}}
 
       // CH: Chamados (acumulado por ticket_id)
@@ -2076,7 +2069,7 @@ function importXL(ev){
           if(tnId&&tnSc&&tnTr&&tnAn){const byTr={};
             rawTn.forEach(r=>{const tr=String(r[tnTr]||'').trim(),id=String(r[tnId]||'').trim(),an=String(r[tnAn]||'').trim(),sc=parseInt(r[tnSc]||0);const dual=tnDual?parseInt(r[tnDual]||0):0;const rank=tnRank?parseInt(r[tnRank]||0):0;const dtRaw=tnDt?r[tnDt]:null;const dt=dtRaw instanceof Date?dtRaw.toLocaleDateString('pt-BR'):(typeof dtRaw==='number'&&dtRaw>40000?new Date(Math.round((dtRaw-25569)*86400000)).toLocaleDateString('pt-BR'):(dtRaw?String(dtRaw).trim():''));
               if(!tr||!id)return;if(!byTr[tr])byTr[tr]=[];byTr[tr].push({external_id:id,score:sc,torneio:tr,analista:an,ativo:sc>0,dual_atual:dual,data_enc:dt,ranking:rank});});
-            const nTN=[];Object.values(byTr).forEach(arr=>{arr.sort((a,b)=>b.score-a.score);arr.forEach((item,i)=>{item.posicao=item.ranking||(i+1);nTN.push(item);});});TN=nTN;}}}
+            const nTN=[];Object.values(byTr).forEach(arr=>{arr.forEach((item,i)=>{item.posicao=item.ranking>0?item.ranking:(i+1);});arr.sort((a,b)=>a.posicao-b.posicao);arr.forEach(item=>nTN.push(item));});TN=nTN;}}}
 
       // GP: join SK × dep — apenas mês atual
       curMm=MM;
@@ -3011,7 +3004,7 @@ function setTNActive(el, mode) {
 }
 
 function renderTNPodio() {
-  const data = getTNCurrent().filter(r => r.ativo).sort((a,b) => b.score - a.score);
+  const data = getTNCurrent().filter(r => r.ativo).sort((a,b) => a.posicao - b.posicao);
   const top3 = data.slice(0, 3);
   const t = tnTorneio;
   const totalParticipants = getTNCurrent().length;
@@ -3056,7 +3049,7 @@ function renderTNTable() {
   const s = document.getElementById('tn-s').value.toLowerCase();
   let data = getTNFiltered();
   if (s) data = data.filter(r => r.external_id.includes(s));
-  data = [...data].sort((a,b) => b.score - a.score);
+  data = [...data].sort((a,b) => a.posicao - b.posicao);
 
   const tot = data.length, pgs = Math.max(1, Math.ceil(tot / TN_PS));
   if (tnPg > pgs) tnPg = 1;
