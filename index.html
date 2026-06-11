@@ -2033,12 +2033,13 @@ function importXL(ev){
       const wsCbName=wb.SheetNames.find(n=>n.toLowerCase().includes('cash'));
       if(wsCbName){const rawCb=XLSX.utils.sheet_to_json(wb.Sheets[wsCbName],{raw:true,defval:null});
         if(rawCb.length){const ks=Object.keys(rawCb[0]);
-          const[cbId,cbV,cbDia,cbMes,cbAn]=[fPri(ks,'external_id','id'),fPri(ks,'cashback'),fPri(ks,'dia','day'),fPri(ks,'mês','mes','month'),fPri(ks,'responsav','analista','vip','gerente')];
+          const[cbId,cbV,cbDia,cbMes,cbAn,cbDt]=[fPri(ks,'external_id','id'),fPri(ks,'cashback'),fPri(ks,'dia','day'),fPri(ks,'mês','mes','month'),fPri(ks,'responsav','analista','vip','gerente'),fPri(ks,'data','date','dt')];
           const fxa=v=>v>=1000?'+1k':v>=500?'500–1k':v>=100?'100–500':v>=50?'50–100':v>=10?'10–50':'0–10';
           if(cbId&&cbV&&cbAn){
             const newCbRaw=rawCb.map(r=>{const id=String(r[cbId]||'').trim(),val=parseFloat(String(r[cbV]||'0').replace(',','.'));
               const an=String(r[cbAn]||'').trim(),d=cbDia?parseInt(r[cbDia]):maxDayNum,mes=cbMes?parseInt(r[cbMes]):MM;
-              return{external_id:id,cashback:Math.round(val*100)/100,dia:d,mes,analista:an};
+              const dtRaw=cbDt?r[cbDt]:null;const dtStr=dtRaw instanceof Date?dtRaw.toLocaleDateString('pt-BR'):(typeof dtRaw==='number'&&dtRaw>40000?new Date(Math.round((dtRaw-25569)*86400000)).toLocaleDateString('pt-BR'):(dtRaw?String(dtRaw).trim():''));
+              return{external_id:id,cashback:Math.round(val*100)/100,dia:d,mes,analista:an,data_cb:dtStr};
             }).filter(r=>r.external_id&&!isNaN(r.cashback));
             // CB: substituição direta — sem acumulação, usa apenas o arquivo do dia importado
             try{localStorage.setItem('dep_acc_cb',JSON.stringify(newCbRaw));}catch(e){}
@@ -2708,8 +2709,9 @@ function renderCBKPIs() {
   const avg      = all.length ? totalCB / all.length : 0;
   const ratio    = totalDep > 0 ? (totalCB / totalDep * 100) : 0;
 
+  const cbDate = CB.find(r=>r.data_cb)?.data_cb || (CB[0]?String(CB[0].dia).padStart(2,'0')+'/'+String(CB[0].mes||6).padStart(2,'0')+'/2026':'—');
   document.getElementById('cb-kpis').innerHTML = `
-    <div class="kc tl"><div class="kl">Clientes com cashback</div><div class="kv" style="color:var(--teal)">${all.length}</div><div class="kf">07/06/2026</div></div>
+    <div class="kc tl"><div class="kl">Clientes com cashback</div><div class="kv" style="color:var(--teal)">${all.length}</div><div class="kf">${cbDate}</div></div>
     <div class="kc gn"><div class="kl">Total cashback</div><div class="kv" style="color:var(--may)">${f(totalCB)}</div><div class="kf">média ${f(avg)}/cliente</div></div>
     <div class="kc am"><div class="kl">Total dep. no dia</div><div class="kv" style="color:#fbbf24">${f(totalDep)}</div><div class="kf">${all.filter(r=>r.dep_dia>0).length} depositaram</div></div>
     <div class="kc rd"><div class="kl">Cashback / Depósito</div><div class="kv" style="color:#f87171">${ratio.toFixed(1)}%</div><div class="kf">do que depositaram</div></div>
@@ -2899,6 +2901,9 @@ function renderCBTbl() {
     </div>`;
   };
 
+  const cbDateTbl = CB.find(r=>r.data_cb)?.data_cb || '';
+  const tblTitle = document.getElementById('cb-tbl-title');
+  if(tblTitle) tblTitle.textContent = cbDateTbl ? `Cashback do dia ${cbDateTbl}` : 'Todos os clientes com cashback';
   document.getElementById('cb-tbl').innerHTML = `<table>
     <thead>
       <tr>
