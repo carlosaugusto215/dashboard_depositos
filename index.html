@@ -2072,11 +2072,11 @@ function importXL(ev){
       const wsTnName=wb.SheetNames.find(n=>n.toLowerCase().includes('torneio'));
       if(wsTnName){const rawTn=XLSX.utils.sheet_to_json(wb.Sheets[wsTnName],{raw:true,defval:null});
         if(rawTn.length){const ks=Object.keys(rawTn[0]);
-          const[tnId,tnSc,tnTr,tnAn]=[fPri(ks,'user_ext_id','external_id','id'),fPri(ks,'score','scores','pontos'),fPri(ks,'torneio','tournament'),fPri(ks,'vip','responsav','analista','gerente')];
+          const[tnId,tnSc,tnTr,tnAn,tnDual,tnDt,tnRank]=[fPri(ks,'id usuario','user_ext_id','external_id','id'),fPri(ks,'score','scores','pontos'),fPri(ks,'torneio','tournament'),fPri(ks,'responsavel','vip','analista','gerente'),fPri(ks,'dual'),fPri(ks,'data de encerramento','encerramento','data_enc'),fPri(ks,'ranking','rank')];
           if(tnId&&tnSc&&tnTr&&tnAn){const byTr={};
-            rawTn.forEach(r=>{const tr=String(r[tnTr]||'').trim(),id=String(r[tnId]||'').trim(),an=String(r[tnAn]||'').trim(),sc=parseInt(r[tnSc]||0);
-              if(!tr||!id)return;if(!byTr[tr])byTr[tr]=[];byTr[tr].push({external_id:id,score:sc,torneio:tr,analista:an,ativo:true});});
-            const nTN=[];Object.values(byTr).forEach(arr=>{arr.sort((a,b)=>b.score-a.score);arr.forEach((item,i)=>{item.posicao=i+1;nTN.push(item);});});TN=nTN;}}}
+            rawTn.forEach(r=>{const tr=String(r[tnTr]||'').trim(),id=String(r[tnId]||'').trim(),an=String(r[tnAn]||'').trim(),sc=parseInt(r[tnSc]||0);const dual=tnDual?parseInt(r[tnDual]||0):0;const rank=tnRank?parseInt(r[tnRank]||0):0;const dtRaw=tnDt?r[tnDt]:null;const dt=dtRaw instanceof Date?dtRaw.toLocaleDateString('pt-BR'):(typeof dtRaw==='number'&&dtRaw>40000?new Date(Math.round((dtRaw-25569)*86400000)).toLocaleDateString('pt-BR'):(dtRaw?String(dtRaw).trim():''));
+              if(!tr||!id)return;if(!byTr[tr])byTr[tr]=[];byTr[tr].push({external_id:id,score:sc,torneio:tr,analista:an,ativo:sc>0,dual_atual:dual,data_enc:dt,ranking:rank});});
+            const nTN=[];Object.values(byTr).forEach(arr=>{arr.sort((a,b)=>b.score-a.score);arr.forEach((item,i)=>{item.posicao=item.ranking||(i+1);nTN.push(item);});});TN=nTN;}}}
 
       // GP: join SK × dep — apenas mês atual
       curMm=MM;
@@ -3044,6 +3044,8 @@ function renderTNPodio() {
           <div style="font-size:11px;color:var(--text2);margin-bottom:6px">${r.analista.split(' ')[0]}</div>
           <div style="font-size:${isGold?'18px':'15px'};font-weight:800;color:${podiumColors[i]}">${r.score.toLocaleString('pt-BR')}</div>
           <div style="font-size:10px;color:var(--text3);margin-top:2px">pontos</div>
+          ${r.dual_atual?`<div style="font-size:9.5px;color:#60a5fa;margin-top:4px;font-weight:600">Dual: ${r.dual_atual}</div>`:''}
+          ${r.data_enc?`<div style="font-size:9px;color:var(--text3);margin-top:2px">Enc: ${r.data_enc}</div>`:''}
         </div>`;
       }).join('')}
     </div>
@@ -3066,13 +3068,17 @@ function renderTNTable() {
 
   const maxScore = data[0] ? data[0].score : 1;
 
+  const hasDual = data.some(r => r.dual_atual);
+  const hasDt   = data.some(r => r.data_enc);
   document.getElementById('tn-tbl').innerHTML = `<table>
     <thead><tr>
       <th style="width:48px">Pos.</th>
       <th>ID Cliente</th>
-      <th>Analista</th>
+      ${hasDual?'<th style="text-align:center;width:64px">Dual</th>':''}
+      ${hasDt?'<th style="width:110px">Encerramento</th>':''}
+      <th>Responsável</th>
       <th style="text-align:right">Score</th>
-      <th style="width:140px"></th>
+      <th style="width:120px"></th>
     </tr></thead>
     <tbody>${sl.map((r, i) => {
       const realPos = r.ativo ? r.posicao : null;
@@ -3083,6 +3089,8 @@ function renderTNTable() {
           ${medalIcon(r.posicao)|| `<span style="font-size:12px">${r.posicao}º</span>`}
         </td>
         <td>${cliN(r.external_id)}</td>
+        ${hasDual?`<td style="text-align:center;font-weight:700;color:#2563eb;font-size:12px">${r.dual_atual||'—'}</td>`:''}
+        ${hasDt?`<td style="font-size:11px;color:var(--text2)">${r.data_enc||'—'}</td>`:''}
         <td style="color:var(--text2);font-size:12px">${r.analista}</td>
         <td style="text-align:right;font-weight:700;font-size:13px;color:${r.ativo?barCol:'var(--text3)'}">${r.score.toLocaleString('pt-BR')}</td>
         <td>
