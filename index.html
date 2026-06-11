@@ -1737,14 +1737,20 @@ function loadSnap(){
     const raw=localStorage.getItem('dep_snap');
     if(!raw)return false;
     const s=JSON.parse(raw);
-    CL=s.CL;YC=s.YC;SK=s.SK;CB=s.CB;CH=s.CH;TN=s.TN;GP=s.GP;
+    CL=s.CL;YC=s.YC;CB=s.CB;CH=s.CH;TN=s.TN;
     AN_DEP=s.AN_DEP;AN_NET=s.AN_NET;DEP_DIA=s.DEP_DIA;
     AJ=s.AJ;AM=s.AM;MO=s.MO;TJ=s.TJ;TM=s.TM;AL=s.AL;JD=s.JD;DD=s.DD;
     if(s.CLI_NAMES)CLI_NAMES=s.CLI_NAMES;
     if(s.CARTEIRA)CARTEIRA=s.CARTEIRA;
     if(s.DEP_ANO)DEP_ANO=s.DEP_ANO;
-    if(s.MO_MENSAL)MO_MENSAL=s.MO_MENSAL;
-    if(s.SK_MENSAL)SK_MENSAL=s.SK_MENSAL;
+    // SK: mescla snap (dias recentes importados) sobre hardcoded (histórico completo Jan-Jun)
+    if(s.SK&&s.SK.length>0){const smm=s.mm||6;const snapSkKeys=new Set(s.SK.map(sk=>sk.external_id+'|'+sk.dia+'|'+(sk.mes||smm)));SK=[...SK.filter(sk=>!snapSkKeys.has(sk.external_id+'|'+sk.dia+'|'+(sk.mes||smm))),...s.SK];}
+    // GP: recalcula do SK mesclado para refletir histórico completo
+    const ltvM={};if(CL&&CL.length>0)CL.forEach(c=>{ltvM[String(c.external_id)]=c.ltv||0;});
+    GP=SK.map(sk=>({external_id:sk.external_id,dia:sk.dia,dep:sk.dep_dia,saque:sk.valor,net:Math.round((sk.dep_dia-sk.valor)*100)/100,analista:sk.analista,ltv:Math.round((ltvM[sk.external_id]||0)*100)/100})).sort((a,b)=>a.net-b.net);
+    // MO_MENSAL e SK_MENSAL: snap atualiza meses presentes, hardcoded preserva meses ausentes (Jan-Mai)
+    if(s.MO_MENSAL)Object.assign(MO_MENSAL,s.MO_MENSAL);
+    if(s.SK_MENSAL)Object.assign(SK_MENSAL,s.SK_MENSAL);
     const selAn=document.getElementById('g-an');
     selAn.innerHTML='<option value="">Todos os Analistas</option>'+AL.map(a=>`<option>${a}</option>`).join('');
     updateDaySelects(s.maxDay, s.mm);
