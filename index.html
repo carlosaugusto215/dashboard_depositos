@@ -1780,14 +1780,18 @@ async function publicarDados(btn){
   try{
     const api='https://api.github.com/repos/carlosaugusto215/dashboard_depositos/contents/index.html';
     const headers={'Authorization':'Bearer '+token,'Accept':'application/vnd.github.v3+json'};
+    // Busca SHA via Content API (arquivo grande não tem content nessa API)
     const getR=await fetch(api,{headers});
     if(!getR.ok){const e=await getR.json().catch(()=>({}));throw new Error(e.message||getR.status);}
     const fd=await getR.json();
-    // Decodifica UTF-8
-    const binStr=atob(fd.content.replace(/\n/g,''));
-    const bytes=new Uint8Array(binStr.length);
-    for(let i=0;i<binStr.length;i++)bytes[i]=binStr.charCodeAt(i);
-    let html=new TextDecoder('utf-8').decode(bytes);
+    if(!fd.sha)throw new Error('SHA não encontrado na resposta do GitHub');
+    // Busca conteúdo via raw URL (suporta arquivos grandes, sem limite de 1MB)
+    st.textContent='Baixando conteúdo do arquivo…';
+    const rawUrl='https://raw.githubusercontent.com/carlosaugusto215/dashboard_depositos/main/index.html?cb='+Date.now();
+    const rawR=await fetch(rawUrl,{cache:'no-store'});
+    if(!rawR.ok)throw new Error('Erro ao buscar raw: '+rawR.status);
+    let html=await rawR.text();
+    if(!html||html.length<1000)throw new Error('Arquivo recebido está vazio ou inválido ('+html.length+' bytes) — tente novamente');
     // Substitui variáveis hardcoded
     const rep=(h,name,val)=>h.replace(new RegExp('^let '+name+'=.*$','m'),'let '+name+'='+JSON.stringify(val)+';');
     html=rep(html,'CL',CL);html=rep(html,'YC',YC);html=rep(html,'SK',SK);
