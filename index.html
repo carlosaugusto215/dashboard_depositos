@@ -1122,7 +1122,8 @@ function renderTB(){
   const a=document.getElementById('g-an').value;
   const {from,to}=gDia();
   const rangeSet=from!==null||to!==null;
-  const daysRange=[1,2,3,4,5,6,7,8].filter(d=>(from===null||d>=from)&&(to===null||d<=to));
+  const _adAll=[...new Set(Object.values(AN_DEP).flatMap(o=>Object.keys(o).map(Number)))].sort((a,b)=>a-b);
+  const daysRange=_adAll.filter(d=>(from===null||d>=from)&&(to===null||d<=to));
 
   let jv,mv,meta;
   if(rangeSet){
@@ -1138,7 +1139,8 @@ function renderTB(){
 
   const p=Math.min((jv/meta)*100,100),rem=Math.max(meta-jv,0);
   const col=mc(p);
-  const depLabel=rangeSet?`${from??1}/06–${to??8}/06`:'Dep. Junho';
+  const _maxD=_adAll.length>0?_adAll[_adAll.length-1]:10;
+  const depLabel=rangeSet?`${from??1}/06–${to??_maxD}/06`:'Dep. Junho';
   document.getElementById('tb-m').innerHTML=`
     <div class="tbp"><div class="tbl">${depLabel}</div><div class="tbv tl">${f(jv)}</div></div>
     <div class="tbp"><div class="tbl">Dep. Maio</div><div class="tbv gn">${f(mv)}</div></div>
@@ -1186,7 +1188,8 @@ function renderOV(){
   const a=document.getElementById('g-an').value;
   const {from:ovF,to:ovT}=gDia();
   const ovRangeSet=ovF!==null||ovT!==null;
-  const ovDays=[1,2,3,4,5,6,7,8].filter(d=>(ovF===null||d>=ovF)&&(ovT===null||d<=ovT));
+  const _ovAll=[...new Set(Object.values(AN_DEP).flatMap(o=>Object.keys(o).map(Number)))].sort((a,b)=>a-b);
+  const ovDays=_ovAll.filter(d=>(ovF===null||d>=ovF)&&(ovT===null||d<=ovT));
   const jv=ovRangeSet
     ?(a?[a]:AL).reduce((s,an)=>s+ovDays.reduce((ss,d)=>ss+(AN_DEP[an]?.[String(d)]||0),0),0)
     :(a?(AJ[a]||0):TJ);
@@ -1250,9 +1253,12 @@ function renderOV(){
     onClick:(_,e)=>{if(!e.length)return;const c=['2 dias','3 dias','+3 dias'][e[0].index];openD(c,'',gF().filter(x=>x.categoria===c));},
     plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+c.label+': '+c.parsed}}}}});
 
+  const _wkAlt=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'],_ddd=parseInt(DD.split('/')[0]);
+  const _sub2ov=(_ddd>2)?`${_wkAlt[new Date(2026,5,_ddd-2).getDay()]} ${String(_ddd-2).padStart(2,'0')}/06`:'2 dias atrás';
+  const _sub3ov=(_ddd>3)?`${_wkAlt[new Date(2026,5,_ddd-3).getDay()]} ${String(_ddd-3).padStart(2,'0')}/06`:'3 dias atrás';
   document.getElementById('d-pills').innerHTML=[
-    {cat:'2 dias',list:d2,bg:'#1d3a8a',tc:'#93c5fd',sub:'Sáb 06/06'},
-    {cat:'3 dias',list:d3,bg:'#78350f',tc:'#fde68a',sub:'Sex 05/06'},
+    {cat:'2 dias',list:d2,bg:'#1d3a8a',tc:'#93c5fd',sub:_sub2ov},
+    {cat:'3 dias',list:d3,bg:'#78350f',tc:'#fde68a',sub:_sub3ov},
     {cat:'+3 dias',list:d3p,bg:'#7f1d1d',tc:'#fca5a5',sub:'> 3 dias'},
   ].map(x=>`<div style="background:${x.bg};border-radius:8px;padding:10px;cursor:pointer;text-align:center;border:1px solid rgba(255,255,255,.06)"
     onclick="openD('${x.cat}','${x.sub}',gF().filter(c=>c.categoria==='${x.cat}'))">
@@ -1297,11 +1303,11 @@ function renderOV(){
     ctx_d.dataset.metaDia=String(metaDia);
     const days=[...new Set(Object.values(AN_DEP).flatMap(o=>Object.keys(o).map(Number)))].filter(d=>(ddF===null||d>=ddF)&&(ddT===null||d<=ddT)).sort((x,y)=>x-y);
     const vals=days.map(d=>_ans.reduce((s,an)=>s+(AN_DEP[an]?.[String(d)]||0),0));
-    const wkMap={1:'Seg',2:'Ter',3:'Qua',4:'Qui',5:'Sex',6:'Sáb',7:'Dom',8:'Seg'};
+    const _wkPT=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
     ctx_d._c = new Chart(ctx_d,{
       type:'bar',
       data:{
-        labels: days.map(d=>`${d<10?'0'+d:d}/06 (${wkMap[d]||''})`),
+        labels: days.map(d=>`${d<10?'0'+d:d}/06 (${_wkPT[new Date(2026,5,d).getDay()]})`),
         datasets:[
           {label:'Depósito',data:vals,
            backgroundColor: vals.map((v,i) => {
@@ -1354,6 +1360,9 @@ function renderAN(){
     ?CL.filter(c=>{const d=parseInt(c.ultimo_dep.split('/')[0]);return(anFrom===null||d>=anFrom)&&(anTo===null||d<=anTo);})
     :CL;
   const con=document.getElementById('a-cards');con.innerHTML='';
+  const _wkAN=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'],_ddAN=parseInt(DD.split('/')[0]);
+  const _sub2an=(_ddAN>2)?`${_wkAN[new Date(2026,5,_ddAN-2).getDay()]} ${String(_ddAN-2).padStart(2,'0')}/06`:'2 dias atrás';
+  const _sub3an=(_ddAN>3)?`${_wkAN[new Date(2026,5,_ddAN-3).getDay()]} ${String(_ddAN-3).padStart(2,'0')}/06`:'3 dias atrás';
   list.forEach((an,i)=>{
     const aD=CLp.filter(c=>c.analista===an);
     const d2=aD.filter(c=>c.categoria==='2 dias');
@@ -1374,24 +1383,21 @@ function renderAN(){
         <div class="actr"><div class="acfi" style="width:${p.toFixed(1)}%;background:${col}"></div></div>
       </div>
       <div class="acds">
-        <div class="ad ad2" onclick="openD('2 dias — ${an}','Sáb 06/06',CL.filter(c=>c.analista==='${an}'&&c.categoria==='2 dias'))"><div class="n">${d2.length}</div><div class="l">2 dias</div></div>
-        <div class="ad ad3" onclick="openD('3 dias — ${an}','Sex 05/06',CL.filter(c=>c.analista==='${an}'&&c.categoria==='3 dias'))"><div class="n">${d3.length}</div><div class="l">3 dias</div></div>
+        <div class="ad ad2" onclick="openD('2 dias — ${an}','${_sub2an}',CL.filter(c=>c.analista==='${an}'&&c.categoria==='2 dias'))"><div class="n">${d2.length}</div><div class="l">2 dias</div></div>
+        <div class="ad ad3" onclick="openD('3 dias — ${an}','${_sub3an}',CL.filter(c=>c.analista==='${an}'&&c.categoria==='3 dias'))"><div class="n">${d3.length}</div><div class="l">3 dias</div></div>
         <div class="ad ad3p" onclick="openD('+3 dias — ${an}','> 3 dias',CL.filter(c=>c.analista==='${an}'&&c.categoria==='+3 dias'))"><div class="n">${d3p.length}</div><div class="l">+3 dias</div></div>
       </div>`;
     con.appendChild(div);
   });
-}
-
   /* Depósito diário e NET por analista */
   (function(){
     const _a = document.getElementById('g-an').value;
     const alist = _a ? [_a] : AL;
     const {from:df,to:dt}=gDia();
-    const days  = [1,2,3,4,5,6,7,8].filter(d=>(df===null||d>=df)&&(dt===null||d<=dt));
-    const labels= days.map(d=>`${d<10?'0'+d:d}/06`);
+    const days=[...new Set(Object.values(AN_DEP).flatMap(o=>Object.keys(o).map(Number)))].sort((a,b)=>a-b).filter(d=>(df===null||d>=df)&&(dt===null||d<=dt));
     const PAL   = ['#00e5c0','#2563eb','#f59e0b','#ef4444','#8b5cf6','#10b981','#f97316'];
-    const wkMap = {1:'Seg',2:'Ter',3:'Qua',4:'Qui',5:'Sex',6:'Sáb',7:'Dom',8:'Seg'};
-    const xlabels = days.map(d=>`${d<10?'0'+d:d} (${wkMap[d]})`);
+    const _wkPT2=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+    const xlabels = days.map(d=>`${d<10?'0'+d:d} (${_wkPT2[new Date(2026,5,d).getDay()]})`);
 
     /* — Depósito por dia — */
     const ctx1 = document.getElementById('c-an-dep');
@@ -1452,6 +1458,7 @@ function renderAN(){
       }
     });
   })();
+}
 
 function selA(name){
   document.getElementById('a-ttl').textContent=name;
