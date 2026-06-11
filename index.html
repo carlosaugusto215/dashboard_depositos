@@ -2067,8 +2067,8 @@ function importXL(ev){
       if(wsTnName){const rawTn=XLSX.utils.sheet_to_json(wb.Sheets[wsTnName],{raw:true,defval:null});
         if(rawTn.length){const ks=Object.keys(rawTn[0]);
           const[tnId,tnSc,tnTr,tnAn,tnDual,tnDt,tnRank]=[fPri(ks,'id usuario','user_ext_id','external_id','id'),fPri(ks,'score','scores','pontos'),fPri(ks,'torneio','tournament'),fPri(ks,'responsavel','vip','analista','gerente'),fPri(ks,'dual'),fPri(ks,'data de encerramento','encerramento','data_enc'),fPri(ks,'ranking','rank')];
-          if(tnId&&tnSc&&tnTr&&tnAn){const byTr={};
-            rawTn.forEach(r=>{const tr=String(r[tnTr]||'').trim(),id=String(r[tnId]||'').trim(),an=String(r[tnAn]||'').trim(),sc=parseInt(r[tnSc]||0);const dual=tnDual?parseInt(r[tnDual]||0):0;const rank=tnRank?parseInt(r[tnRank]||0):0;const dtRaw=tnDt?r[tnDt]:null;const dt=dtRaw instanceof Date?dtRaw.toLocaleDateString('pt-BR'):(typeof dtRaw==='number'&&dtRaw>40000?new Date(Math.round((dtRaw-25569)*86400000)).toLocaleDateString('pt-BR'):(dtRaw?String(dtRaw).trim():''));
+          if(tnId&&tnSc&&tnTr&&tnAn){const byTr={};let lastTr='';
+            rawTn.forEach(r=>{const trRaw=String(r[tnTr]||'').trim();if(trRaw)lastTr=trRaw;const tr=trRaw||lastTr,id=String(r[tnId]||'').trim(),an=String(r[tnAn]||'').trim(),sc=parseInt(r[tnSc]||0);const dual=tnDual?parseInt(r[tnDual]||0):0;const rank=tnRank?parseInt(r[tnRank]||0):0;const dtRaw=tnDt?r[tnDt]:null;const dt=dtRaw instanceof Date?dtRaw.toLocaleDateString('pt-BR'):(typeof dtRaw==='number'&&dtRaw>40000?new Date(Math.round((dtRaw-25569)*86400000)).toLocaleDateString('pt-BR'):(dtRaw?String(dtRaw).trim():''));
               if(!tr||!id)return;if(!byTr[tr])byTr[tr]=[];byTr[tr].push({external_id:id,score:sc,torneio:tr,analista:an,ativo:sc>0,dual_atual:dual,data_enc:dt,ranking:rank});});
             const nTN=[];Object.values(byTr).forEach(arr=>{arr.forEach((item,i)=>{item.posicao=item.ranking>0?item.ranking:(i+1);});arr.sort((a,b)=>a.posicao-b.posicao);arr.forEach(item=>nTN.push(item));});TN=nTN;}}}
 
