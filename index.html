@@ -1746,8 +1746,16 @@ function loadSnap(){
     if(!raw)return false;
     const s=JSON.parse(raw);
     CL=s.CL;YC=s.YC;CB=s.CB;CH=s.CH;TN=s.TN;
-    AN_DEP=s.AN_DEP;AN_NET=s.AN_NET;DEP_DIA=s.DEP_DIA;
-    AJ=s.AJ;AM=s.AM;MO=s.MO;TJ=s.TJ;TM=s.TM;AL=s.AL;JD=s.JD;DD=s.DD;
+    AN_NET=s.AN_NET;
+    AM=s.AM;MO=s.MO;TM=s.TM;AL=s.AL;JD=s.JD;DD=s.DD;
+    // AN_DEP: mescla snap sobre hardcoded — preserva dias hardcoded faltantes no snap
+    if(s.AN_DEP){Object.entries(s.AN_DEP).forEach(([an,days])=>{if(!AN_DEP[an])AN_DEP[an]={};Object.entries(days).forEach(([d,v])=>{AN_DEP[an][d]=v;});});}
+    // DEP_DIA: reconstrói do AN_DEP final
+    DEP_DIA=[];Object.entries(AN_DEP).forEach(([an,days])=>Object.entries(days).forEach(([d,v])=>DEP_DIA.push({analista:an,dia:parseInt(d),dep:Math.round(v*100)/100})));
+    // AJ/TJ: sempre recalculados do AN_DEP — imunes a snaps com dados incompletos
+    AJ={};Object.entries(AN_DEP).forEach(([an,days])=>{AJ[an]=Math.round(Object.values(days).reduce((s,v)=>s+v,0)*100)/100;});
+    TJ=Math.round(Object.values(AJ).reduce((s,v)=>s+v,0)*100)/100;
+    AL.sort((a,b)=>(AJ[b]||0)-(AJ[a]||0));
     if(s.CLI_NAMES)CLI_NAMES=s.CLI_NAMES;
     if(s.CARTEIRA)CARTEIRA=s.CARTEIRA;
     if(s.DEP_ANO)DEP_ANO=s.DEP_ANO;
