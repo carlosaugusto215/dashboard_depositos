@@ -498,18 +498,35 @@ tr:last-child td{border-bottom:none}
     </div>
   </div>
 
+  <!-- acompanhamento de contatos por analista -->
+  <div class="card" style="margin-bottom:16px">
+    <div class="ch">
+      <div><div class="ct">Acompanhamento de Contatos</div><div class="cs">Marque os tickets em que o analista entrou em contato com o cliente</div></div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span id="ch-gs-status" style="font-size:11px;color:var(--text3)">Sheets não configurado</span>
+        <button onclick="configChGs()" style="background:var(--bg3);border:1px solid var(--border);color:var(--text2);padding:5px 10px;border-radius:var(--r);font-size:11px;cursor:pointer">⚙ Configurar Sheets</button>
+      </div>
+    </div>
+    <div id="ch-contato-kpi" style="display:flex;gap:12px;flex-wrap:wrap;margin-top:4px"></div>
+  </div>
+
   <!-- tabela de tickets -->
   <div class="card">
     <div class="ch">
       <div><div class="ct" id="ch-tbl-title">Todos os tickets</div><div class="cs" id="ch-tbl-sub">Clique em um dia para filtrar</div></div>
-      <div style="display:flex;gap:8px;align-items:center">
-        <input type="text" class="si" placeholder="Buscar ID cliente ou ticket…" id="ch-s" oninput="renderChTbl()" style="width:220px">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <input type="text" class="si" placeholder="Buscar ID cliente ou ticket…" id="ch-s" oninput="renderChTbl()" style="width:200px">
         <select class="sel" id="ch-so" onchange="renderChTbl()">
           <option value="dia">Dia</option>
           <option value="hora">Hora</option>
           <option value="motivo">Motivo A-Z</option>
           <option value="gerente">Gerente A-Z</option>
         </select>
+        <div style="display:flex;gap:4px">
+          <button id="ch-cf-all" onclick="setChContatoFilter('all')" style="padding:4px 10px;border-radius:var(--r);font-size:11px;cursor:pointer;border:1px solid var(--border);background:var(--bg2);color:var(--text)" class="ch-cf on">Todos</button>
+          <button id="ch-cf-pend" onclick="setChContatoFilter('pendente')" style="padding:4px 10px;border-radius:var(--r);font-size:11px;cursor:pointer;border:1px solid rgba(239,68,68,.4);background:rgba(239,68,68,.08);color:#ef4444" class="ch-cf">Pendentes</button>
+          <button id="ch-cf-feito" onclick="setChContatoFilter('feito')" style="padding:4px 10px;border-radius:var(--r);font-size:11px;cursor:pointer;border:1px solid rgba(16,185,129,.4);background:rgba(16,185,129,.08);color:#10b981" class="ch-cf">Contatados</button>
+        </div>
         <button onclick="clearChDay()" style="background:var(--bg3);border:1px solid var(--border);color:var(--text2);padding:5px 12px;border-radius:var(--r);font-size:11px;cursor:pointer">Limpar filtro</button>
       </div>
     </div>
@@ -1716,7 +1733,7 @@ function goTo(id,el){
   if(id==='torneios'){renderTorneios();}
   if(id==='cashback'){renderCashback();}
   if(id==='saques'){renderSaques();}
-  if(id==='chamados'){renderChamados();}
+  if(id==='chamados'){renderChamados();loadChContacts();}
   if(id==='ativos'){renderYKPIs();renderYT();}
   if(id==='tendencia')renderTR();
   if(id==='analistas')renderAN();
@@ -2142,6 +2159,8 @@ function importXL(ev){
 /* ── CHAMADOS ──────────────────────────── */
 let chDay = null, chPg = 1;
 const CH_PS = 15;
+let CH_CONTACTS = {};   // {ticket_id: {feito:bool, data:string}}
+let chContatoFilter = 'all'; // 'all'|'pendente'|'feito'
 
 const CH_COLORS = ['#2563eb','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899','#84cc16','#f97316','#6366f1','#14b8a6','#a855f7'];
 
@@ -2155,13 +2174,130 @@ function getCHFiltered() {
   return d;
 }
 
+function setChContatoFilter(f) {
+  chContatoFilter = f;
+  document.querySelectorAll('.ch-cf').forEach(b => b.classList.remove('on'));
+  const el = {all:'ch-cf-all',pendente:'ch-cf-pend',feito:'ch-cf-feito'}[f];
+  if(el) document.getElementById(el).classList.add('on');
+  chPg = 1;
+  renderChTbl();
+}
+
+function configChGs() {
+  const cur = localStorage.getItem('ch_gs_url') || '';
+  const url = prompt(
+    'URL do Google Apps Script Web App\n\n' +
+    'Como configurar:\n' +
+    '1. Abra sua planilha → Extensões → Apps Script\n' +
+    '2. Cole o script fornecido e salve\n' +
+    '3. Implante → Nova implantação → Web App\n' +
+    '   · Executar como: Eu mesmo\n' +
+    '   · Quem tem acesso: Qualquer pessoa\n' +
+    '4. Copie a URL da Web App e cole aqui\n',
+    cur
+  );
+  if (url === null) return;
+  const trimmed = url.trim();
+  localStorage.setItem('ch_gs_url', trimmed);
+  updateChGsStatus();
+  if (trimmed) loadChContacts();
+}
+
+function updateChGsStatus() {
+  const url = localStorage.getItem('ch_gs_url') || '';
+  const el = document.getElementById('ch-gs-status');
+  if (!el) return;
+  if (url) {
+    el.textContent = '✓ Sheets conectado';
+    el.style.color = '#10b981';
+  } else {
+    el.textContent = 'Sheets não configurado';
+    el.style.color = 'var(--text3)';
+  }
+}
+
+async function loadChContacts() {
+  const local = localStorage.getItem('ch_contacts');
+  if (local) { try { CH_CONTACTS = JSON.parse(local); } catch(e) {} }
+  const url = localStorage.getItem('ch_gs_url');
+  if (!url) { renderChContatoKPI(); renderChTbl(); return; }
+  try {
+    const res = await fetch(url + '?action=get', {cache:'no-cache'});
+    const data = await res.json();
+    data.forEach(row => {
+      if (!row.ticket_id) return;
+      const feito = row.feito === true || String(row.feito).toUpperCase() === 'TRUE' || row.feito === 1;
+      CH_CONTACTS[String(row.ticket_id)] = {feito, data: row.data_contato || ''};
+    });
+    localStorage.setItem('ch_contacts', JSON.stringify(CH_CONTACTS));
+    renderChContatoKPI(); renderChTbl();
+  } catch(e) {
+    console.warn('[CH] Sheets sync error:', e);
+    renderChContatoKPI(); renderChTbl();
+  }
+}
+
+async function toggleChContato(ticketId, clienteId, gerente, dia, motivo) {
+  const cur = CH_CONTACTS[String(ticketId)] || {feito:false};
+  const feito = !cur.feito;
+  const dataContato = feito ? new Date().toLocaleDateString('pt-BR') : '';
+  CH_CONTACTS[String(ticketId)] = {feito, data: dataContato};
+  localStorage.setItem('ch_contacts', JSON.stringify(CH_CONTACTS));
+  renderChContatoKPI(); renderChTbl();
+  const url = localStorage.getItem('ch_gs_url');
+  if (!url) return;
+  try {
+    const p = new URLSearchParams({action:'set',ticket_id:ticketId,cliente_id:clienteId,gerente,dia,mes:curMm||6,motivo,feito:feito?'TRUE':'FALSE',data_contato:dataContato});
+    await fetch(url + '?' + p.toString(), {cache:'no-cache'});
+  } catch(e) { console.warn('[CH] Sheets write error:', e); }
+}
+
+function renderChContatoKPI() {
+  const el = document.getElementById('ch-contato-kpi');
+  if (!el) return;
+  const all = CH;
+  const byGer = {};
+  all.forEach(c => {
+    if (!byGer[c.gerente]) byGer[c.gerente] = {total:0, feito:0};
+    byGer[c.gerente].total++;
+    if (CH_CONTACTS[String(c.ticket_id)]?.feito) byGer[c.gerente].feito++;
+  });
+  const sorted = Object.entries(byGer).sort((a,b) => b[1].total - a[1].total);
+  const totalAll = all.length, totalFeito = Object.values(CH_CONTACTS).filter(v=>v.feito).length;
+  el.innerHTML = sorted.map(([ger, v]) => {
+    const pct = v.total > 0 ? Math.round(v.feito / v.total * 100) : 0;
+    const col = pct === 100 ? '#10b981' : pct >= 60 ? '#f59e0b' : '#ef4444';
+    const firstName = ger.split(' ')[0];
+    return `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 14px;min-width:140px;flex:1">
+      <div style="font-size:11px;color:var(--text3);margin-bottom:4px;font-weight:600">${firstName}</div>
+      <div style="display:flex;align-items:baseline;gap:4px">
+        <span style="font-size:20px;font-weight:700;color:${col}">${v.feito}</span>
+        <span style="font-size:12px;color:var(--text3)">/ ${v.total}</span>
+        <span style="font-size:10px;font-weight:600;color:${col};margin-left:2px">${pct}%</span>
+      </div>
+      <div style="height:3px;background:var(--bg4);border-radius:99px;margin-top:6px;overflow:hidden">
+        <div style="height:100%;width:${pct}%;background:${col};border-radius:99px;transition:width .4s"></div>
+      </div>
+    </div>`;
+  }).join('') + `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;min-width:120px">
+    <div style="font-size:11px;color:var(--text3);margin-bottom:4px;font-weight:600">Total</div>
+    <div style="display:flex;align-items:baseline;gap:4px">
+      <span style="font-size:20px;font-weight:700;color:var(--teal)">${totalFeito}</span>
+      <span style="font-size:12px;color:var(--text3)">/ ${totalAll}</span>
+    </div>
+    <div style="font-size:10px;color:var(--text3);margin-top:4px">${totalAll - totalFeito} pendentes</div>
+  </div>`;
+}
+
 function renderChamados() {
   renderChKPIs();
   renderChDayBars();
   renderChDonut();
   renderChSubBars();
   renderChGerBar();
+  renderChContatoKPI();
   renderChTbl();
+  updateChGsStatus();
 }
 
 function renderChKPIs() {
@@ -2323,6 +2459,8 @@ function renderChTbl() {
   const so = document.getElementById('ch-so').value;
   let data = getCHFiltered();
   if (s) data = data.filter(c => c.cliente_id.includes(s) || c.ticket_id.includes(s) || c.motivo.toLowerCase().includes(s) || c.gerente.toLowerCase().includes(s));
+  if (chContatoFilter === 'pendente') data = data.filter(c => !CH_CONTACTS[String(c.ticket_id)]?.feito);
+  if (chContatoFilter === 'feito')    data = data.filter(c =>  CH_CONTACTS[String(c.ticket_id)]?.feito);
   const sorters = {
     dia: (a,b) => a.dia - b.dia || a.hora - b.hora,
     hora: (a,b) => a.hora - b.hora,
@@ -2344,20 +2482,35 @@ function renderChTbl() {
   document.getElementById('ch-tbl').innerHTML = `<table>
     <thead>
       <tr>
+        <th style="width:36px">✓</th>
         <th>Ticket</th><th>ID Cliente</th><th>Dia</th><th>Hora</th>
         <th>Motivo</th><th>Submotivo</th><th>Gerente</th>
       </tr>
     </thead>
     <tbody>
-      ${sl.map(c => `<tr>
-        <td class="mo">#${c.ticket_id}</td>
-        <td>${cliN(c.cliente_id)}</td>
-        <td style="color:var(--text);font-weight:600">${c.dia < 10 ? '0'+c.dia : c.dia}/06</td>
-        <td style="color:var(--text2)">${String(c.hora).padStart(2,'0')}h</td>
-        <td>${motivoBadge(c.motivo)}</td>
-        <td style="color:var(--text2);font-size:11px">${c.submotivo}</td>
-        <td style="color:var(--text2)">${c.gerente}</td>
-      </tr>`).join('')}
+      ${sl.map(c => {
+        const ct = CH_CONTACTS[String(c.ticket_id)] || {feito:false};
+        const rowBg = ct.feito ? 'background:rgba(16,185,129,.05)' : '';
+        const checkStyle = ct.feito
+          ? 'background:#10b981;border-color:#10b981;color:#fff'
+          : 'background:var(--bg3);border-color:var(--border);color:var(--text3)';
+        return `<tr style="${rowBg}">
+          <td style="text-align:center;padding:4px">
+            <button onclick="toggleChContato('${c.ticket_id}','${c.cliente_id}','${c.gerente.replace(/'/g,'\\'')}',${c.dia},'${c.motivo.replace(/'/g,'\\'')}');event.stopPropagation()"
+              title="${ct.feito ? 'Contato feito em '+ct.data+' — clique para desfazer' : 'Marcar como contatado'}"
+              style="width:26px;height:26px;border-radius:6px;border:1.5px solid;cursor:pointer;font-size:13px;display:inline-flex;align-items:center;justify-content:center;transition:all .15s;${checkStyle}">
+              ${ct.feito ? '✓' : ''}
+            </button>
+          </td>
+          <td class="mo">#${c.ticket_id}</td>
+          <td>${cliN(c.cliente_id)}</td>
+          <td style="color:var(--text);font-weight:600">${c.dia < 10 ? '0'+c.dia : c.dia}/06</td>
+          <td style="color:var(--text2)">${String(c.hora||0).padStart(2,'0')}h</td>
+          <td>${motivoBadge(c.motivo)}</td>
+          <td style="color:var(--text2);font-size:11px">${c.submotivo||''}</td>
+          <td style="color:var(--text2)">${c.gerente}</td>
+        </tr>`;
+      }).join('')}
     </tbody>
   </table>`;
 
