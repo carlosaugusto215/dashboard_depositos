@@ -2278,7 +2278,9 @@ function _writeChToSheets(ticketId, feito, dataContato, obs) {
     dia:ticket.dia, mes:curMm||6, motivo:ticket.motivo||'',
     feito:feito?'TRUE':'FALSE', data_contato:dataContato, observacao:obs
   });
-  (new Image()).src = url + '?' + p.toString() + '&_t=' + Date.now();
+  const fullUrl = url + '?' + p.toString() + '&_t=' + Date.now();
+  console.log('[CH Sheets] URL:', fullUrl);
+  (new Image()).src = fullUrl;
 }
 
 function renderChContatoKPI() {
