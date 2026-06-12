@@ -2259,6 +2259,7 @@ function closeChModal() {
 function confirmChContato() {
   if (!_chModalTicketId) return;
   const obs = document.getElementById('ch-obs-txt').value.trim();
+  console.log('[CH confirm] ticketId:', _chModalTicketId, '| obs:', JSON.stringify(obs));
   const dataContato = new Date().toLocaleDateString('pt-BR');
   CH_CONTACTS[String(_chModalTicketId)] = {feito:true, data:dataContato, obs};
   localStorage.setItem('ch_contacts', JSON.stringify(CH_CONTACTS));
