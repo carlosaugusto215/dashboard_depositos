@@ -1928,13 +1928,11 @@ function importXL(ev){
       const rC=allRowsCur.filter(r=>r.date>=new Date(MY,MM-1,1)&&r.date<today);
       const rP=allRowsPrev.filter(r=>r.date.getFullYear()===PY&&r.date.getMonth()+1===PM);
 
-      // Linhas sintéticas do AN_DEP para dias ainda não acumulados em raw — preserva histórico hardcoded
-      // (não usadas quando o import cobre todos os dias 1..maxDayNum, para evitar dupla contagem)
-      const accDiasSet=new Set(freshDeps.map(r=>r.dia));
-      const fullCoverage=Array.from({length:maxDayNum},(_,i)=>i+1).every(d=>accDiasSet.has(d));
+      // KPI: raw do arquivo atual para dias importados, hardcoded AN_DEP para dias históricos não cobertos
+      // Isso garante que acumulado corrompido no localStorage nunca contamine os totais de depósito
       const synRows=[];
-      if(!fullCoverage&&typeof AN_DEP==='object'){Object.entries(AN_DEP).forEach(([an,days])=>{Object.entries(days).forEach(([d,total])=>{if(!accDiasSet.has(parseInt(d)))synRows.push({id:'__s_'+an+'_'+d,date:new Date(MY,MM-1,parseInt(d)),val:total,resp:an});});});}
-      const rC_KPI=[...rC,...synRows]; // KPI/gráficos: inclui dias históricos do hardcoded
+      if(typeof AN_DEP==='object'){Object.entries(AN_DEP).forEach(([an,days])=>{Object.entries(days).forEach(([d,total])=>{if(!newDias.has(parseInt(d)))synRows.push({id:'__s_'+an+'_'+d,date:new Date(MY,MM-1,parseInt(d)),val:total,resp:an});});});}
+      const rC_KPI=[...rC.filter(r=>newDias.has(r.date.getDate())),...synRows]; // raw para dias importados + hardcoded para histórico
 
       // ltvM: seed do hardcoded CL/YC para preservar LTV histórico
       const ltvM={};
