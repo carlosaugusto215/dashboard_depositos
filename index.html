@@ -2234,7 +2234,7 @@ async function toggleChContato(ticketId) {
   if (!url || !ticket) return;
   try {
     const p = new URLSearchParams({action:'set',ticket_id:ticketId,cliente_id:ticket.cliente_id,gerente:ticket.gerente,dia:ticket.dia,mes:curMm||6,motivo:ticket.motivo||'',feito:feito?'TRUE':'FALSE',data_contato:dataContato});
-    fetch(url + '?' + p.toString(), {mode:'no-cors',cache:'no-cache'});
+    (new Image()).src = url + '?' + p.toString() + '&_t=' + Date.now();
   } catch(e) { console.warn('[CH] Sheets write error:', e); }
 }
 
