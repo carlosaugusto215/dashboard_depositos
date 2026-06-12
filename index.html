@@ -1132,7 +1132,8 @@ function renderTB(){
     mv=a?(AM[a]||0):TM;
     meta=a?MP:MT;
   } else {
-    jv=a?(AJ[a]||0):TJ;
+    // Sempre recalcula do AN_DEP para garantir que o cabeçalho bate com os dias exibidos
+    jv=a?Object.values(AN_DEP[a]||{}).reduce((s,v)=>s+v,0):Object.values(AN_DEP).reduce((s,days)=>s+Object.values(days).reduce((ss,v)=>ss+v,0),0);
     mv=a?(AM[a]||0):TM;
     meta=a?MP:MT;
   }
@@ -1192,7 +1193,7 @@ function renderOV(){
   const ovDays=_ovAll.filter(d=>(ovF===null||d>=ovF)&&(ovT===null||d<=ovT));
   const jv=ovRangeSet
     ?(a?[a]:AL).reduce((s,an)=>s+ovDays.reduce((ss,d)=>ss+(AN_DEP[an]?.[String(d)]||0),0),0)
-    :(a?(AJ[a]||0):TJ);
+    :(a?Object.values(AN_DEP[a]||{}).reduce((s,v)=>s+v,0):Object.values(AN_DEP).reduce((s,days)=>s+Object.values(days).reduce((ss,v)=>ss+v,0),0));
   const meta=a?MP:MT;
   const pct=((jv/meta)*100).toFixed(1);
   const d2=data.filter(c=>c.categoria==='2 dias');
@@ -1748,11 +1749,10 @@ function loadSnap(){
     CL=s.CL;YC=s.YC;CB=s.CB;CH=s.CH;TN=s.TN;
     AN_NET=s.AN_NET;
     AM=s.AM;MO=s.MO;TM=s.TM;AL=s.AL;JD=s.JD;DD=s.DD;
-    // AN_DEP: mescla snap sobre hardcoded — preserva dias hardcoded faltantes no snap
-    if(s.AN_DEP){Object.entries(s.AN_DEP).forEach(([an,days])=>{if(!AN_DEP[an])AN_DEP[an]={};Object.entries(days).forEach(([d,v])=>{AN_DEP[an][d]=v;});});}
-    // DEP_DIA: reconstrói do AN_DEP final
+    // AN_DEP: SEMPRE do hardcoded — snap nunca sobrescreve totais diários
+    // DEP_DIA: reconstrói do AN_DEP hardcoded
     DEP_DIA=[];Object.entries(AN_DEP).forEach(([an,days])=>Object.entries(days).forEach(([d,v])=>DEP_DIA.push({analista:an,dia:parseInt(d),dep:Math.round(v*100)/100})));
-    // AJ/TJ: sempre recalculados do AN_DEP — imunes a snaps com dados incompletos
+    // AJ/TJ: calculados do AN_DEP hardcoded — fonte única de verdade
     AJ={};Object.entries(AN_DEP).forEach(([an,days])=>{AJ[an]=Math.round(Object.values(days).reduce((s,v)=>s+v,0)*100)/100;});
     TJ=Math.round(Object.values(AJ).reduce((s,v)=>s+v,0)*100)/100;
     AL.sort((a,b)=>(AJ[b]||0)-(AJ[a]||0));
