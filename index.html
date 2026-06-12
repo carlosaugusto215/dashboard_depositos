@@ -2537,10 +2537,7 @@ function renderChTbl() {
           <td style="color:var(--text2)">${String(c.hora||0).padStart(2,'0')}h</td>
           <td>${motivoBadge(c.motivo)}</td>
           <td style="color:var(--text2);font-size:11px">${c.submotivo||''}</td>
-          <td style="color:var(--text2)">
-            ${c.gerente}
-            ${CH_CONTACTS[String(c.ticket_id)]?.obs ? `<div style="font-size:10px;color:#10b981;margin-top:2px;font-style:italic">${CH_CONTACTS[String(c.ticket_id)].obs}</div>` : ''}
-          </td>
+          <td style="color:var(--text2)">${c.gerente}</td>
         </tr>`;
       }).join('')}
     </tbody>
