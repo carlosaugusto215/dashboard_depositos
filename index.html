@@ -2159,8 +2159,9 @@ function importXL(ev){
 /* ── CHAMADOS ──────────────────────────── */
 let chDay = null, chPg = 1;
 const CH_PS = 15;
-let CH_CONTACTS = {};   // {ticket_id: {feito:bool, data:string}}
+let CH_CONTACTS = {};   // {ticket_id: {feito:bool, data:string, obs:string}}
 let chContatoFilter = 'all'; // 'all'|'pendente'|'feito'
+let _chModalTicketId = null;
 
 const CH_COLORS = ['#2563eb','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899','#84cc16','#f97316','#6366f1','#14b8a6','#a855f7'];
 
@@ -2222,20 +2223,62 @@ async function loadChContacts() {
   renderChContatoKPI(); renderChTbl();
 }
 
-async function toggleChContato(ticketId) {
-  const ticket = CH.find(c => String(c.ticket_id) === String(ticketId));
+function toggleChContato(ticketId) {
   const cur = CH_CONTACTS[String(ticketId)] || {feito:false};
-  const feito = !cur.feito;
-  const dataContato = feito ? new Date().toLocaleDateString('pt-BR') : '';
-  CH_CONTACTS[String(ticketId)] = {feito, data: dataContato};
+  if (cur.feito) {
+    // Desmarcando — limpa imediatamente sem popup
+    CH_CONTACTS[String(ticketId)] = {feito:false, data:'', obs:''};
+    localStorage.setItem('ch_contacts', JSON.stringify(CH_CONTACTS));
+    renderChContatoKPI(); renderChTbl();
+    _writeChToSheets(ticketId, false, '', '');
+  } else {
+    // Marcando — abre popup de observação
+    openChModal(ticketId);
+  }
+}
+
+function openChModal(ticketId) {
+  const ticket = CH.find(c => String(c.ticket_id) === String(ticketId));
+  if (!ticket) return;
+  _chModalTicketId = ticketId;
+  const cur = CH_CONTACTS[String(ticketId)] || {};
+  const modal = document.getElementById('ch-obs-modal');
+  document.getElementById('ch-obs-info').innerHTML =
+    `Ticket <strong>#${ticket.ticket_id}</strong> &nbsp;·&nbsp; ${ticket.gerente} &nbsp;·&nbsp; ${ticket.dia < 10 ? '0'+ticket.dia : ticket.dia}/06<br>` +
+    `<span style="color:var(--text2)">${ticket.motivo || ''}${ticket.submotivo ? ' — '+ticket.submotivo : ''}</span>`;
+  document.getElementById('ch-obs-txt').value = cur.obs || '';
+  modal.style.display = 'flex';
+  setTimeout(() => document.getElementById('ch-obs-txt').focus(), 50);
+}
+
+function closeChModal() {
+  document.getElementById('ch-obs-modal').style.display = 'none';
+  _chModalTicketId = null;
+}
+
+function confirmChContato() {
+  if (!_chModalTicketId) return;
+  const obs = document.getElementById('ch-obs-txt').value.trim();
+  const dataContato = new Date().toLocaleDateString('pt-BR');
+  CH_CONTACTS[String(_chModalTicketId)] = {feito:true, data:dataContato, obs};
   localStorage.setItem('ch_contacts', JSON.stringify(CH_CONTACTS));
+  _writeChToSheets(_chModalTicketId, true, dataContato, obs);
+  closeChModal();
   renderChContatoKPI(); renderChTbl();
+}
+
+function _writeChToSheets(ticketId, feito, dataContato, obs) {
   const url = localStorage.getItem('ch_gs_url');
-  if (!url || !ticket) return;
-  try {
-    const p = new URLSearchParams({action:'set',ticket_id:ticketId,cliente_id:ticket.cliente_id,gerente:ticket.gerente,dia:ticket.dia,mes:curMm||6,motivo:ticket.motivo||'',feito:feito?'TRUE':'FALSE',data_contato:dataContato});
-    (new Image()).src = url + '?' + p.toString() + '&_t=' + Date.now();
-  } catch(e) { console.warn('[CH] Sheets write error:', e); }
+  if (!url) return;
+  const ticket = CH.find(c => String(c.ticket_id) === String(ticketId));
+  if (!ticket) return;
+  const p = new URLSearchParams({
+    action:'set', ticket_id:ticketId,
+    cliente_id:ticket.cliente_id, gerente:ticket.gerente,
+    dia:ticket.dia, mes:curMm||6, motivo:ticket.motivo||'',
+    feito:feito?'TRUE':'FALSE', data_contato:dataContato, observacao:obs
+  });
+  (new Image()).src = url + '?' + p.toString() + '&_t=' + Date.now();
 }
 
 function renderChContatoKPI() {
@@ -2494,7 +2537,10 @@ function renderChTbl() {
           <td style="color:var(--text2)">${String(c.hora||0).padStart(2,'0')}h</td>
           <td>${motivoBadge(c.motivo)}</td>
           <td style="color:var(--text2);font-size:11px">${c.submotivo||''}</td>
-          <td style="color:var(--text2)">${c.gerente}</td>
+          <td style="color:var(--text2)">
+            ${c.gerente}
+            ${CH_CONTACTS[String(c.ticket_id)]?.obs ? `<div style="font-size:10px;color:#10b981;margin-top:2px;font-style:italic">${CH_CONTACTS[String(c.ticket_id)].obs}</div>` : ''}
+          </td>
         </tr>`;
       }).join('')}
     </tbody>
@@ -3605,6 +3651,21 @@ try{const _ca=localStorage.getItem('dep_carteira');if(_ca)CARTEIRA=JSON.parse(_c
 const _initMM=parseInt(DD.split('/')[1]);updateDaySelects(JD,_initMM);
 if(loadSnap()){applyF();}else{renderTB();renderOV();renderAN();renderCT();}
 checkSession();
+document.addEventListener('keydown', e => { if(e.key==='Escape') closeChModal(); });
 </script>
+<!-- Modal de observação de contato (Chamados) -->
+<div id="ch-obs-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9999;align-items:center;justify-content:center">
+  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:26px 28px;width:440px;max-width:92vw;box-shadow:0 20px 60px rgba(0,0,0,.5)">
+    <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:6px">Registrar Contato</div>
+    <div id="ch-obs-info" style="font-size:12px;color:var(--text3);margin-bottom:18px;line-height:1.6"></div>
+    <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:6px">Observação</label>
+    <textarea id="ch-obs-txt" placeholder="Descreva como foi o contato, o que foi combinado…" rows="4"
+      style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:13px;resize:vertical;box-sizing:border-box;font-family:inherit;outline:none"></textarea>
+    <div style="display:flex;gap:8px;margin-top:18px;justify-content:flex-end">
+      <button onclick="closeChModal()" style="padding:8px 20px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);color:var(--text2);cursor:pointer;font-size:13px">Cancelar</button>
+      <button onclick="confirmChContato()" style="padding:8px 20px;border-radius:8px;border:none;background:#10b981;color:#fff;cursor:pointer;font-size:13px;font-weight:700">✓ Confirmar Contato</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
