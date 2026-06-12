@@ -1261,7 +1261,7 @@ function confirmDepContato(){
 }
 
 function _writeDepToSheets(clientId,feito,dataContato,obs,client){
-  const url=localStorage.getItem('ch_gs_url');
+  const url=localStorage.getItem('ch_gs_url')||GS_SHEETS_URL;
   if(!url)return;
   const p=new URLSearchParams({
     sheet_name:'Depositos',action:'set',
@@ -2235,6 +2235,7 @@ function importXL(ev){
 /* ── CHAMADOS ──────────────────────────── */
 let chDay = null, chPg = 1;
 const CH_PS = 15;
+const GS_SHEETS_URL = 'https://script.google.com/macros/s/AKfycbzUpEl_SuLXDOp8AlL5KdE5SuEAF4xwmxzAQqzG6mZ9VBZaGaCN1avANxPmiQq1NlXxUg/exec';
 let CH_CONTACTS = {};   // {ticket_id: {feito:bool, data:string, obs:string}}
 let chContatoFilter = 'all'; // 'all'|'pendente'|'feito'
 let _chModalTicketId = null;
@@ -2348,7 +2349,7 @@ function confirmChContato() {
 }
 
 function _writeChToSheets(ticketId, feito, dataContato, obs) {
-  const url = localStorage.getItem('ch_gs_url');
+  const url = localStorage.getItem('ch_gs_url') || GS_SHEETS_URL;
   if (!url) return;
   const ticket = CH.find(c => String(c.ticket_id) === String(ticketId));
   if (!ticket) return;
