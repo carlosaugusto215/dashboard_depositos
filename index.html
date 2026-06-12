@@ -1192,11 +1192,88 @@ function renderDL(){
   const q=document.getElementById('d-srch').value.toLowerCase();
   const r=q?dData.filter(c=>c.external_id.includes(q)):dData;
   document.getElementById('d-cnt').textContent=r.length+' cliente(s)';
-  document.getElementById('d-list').innerHTML=r.map(c=>`
-    <div class="cro">
-      <div><div class="cid">${cliNm(c.external_id)}</div><div style="font-size:10px;color:var(--text3);font-family:'JetBrains Mono',monospace;margin-bottom:1px">${c.external_id}</div><div class="cmeta">${c.analista} · ${c.qtd_dep_jun} dep. jun.</div><div class="cdt">Último: ${c.ultimo_dep} · ${c.dias_sem_dep} dias</div></div>
+  document.getElementById('d-list').innerHTML=r.map(c=>{
+    const ct=DEP_CONTACTS[String(c.external_id)]||{feito:false};
+    const chkStyle=ct.feito
+      ?'background:#10b981;border-color:#10b981;color:#fff'
+      :'background:var(--bg3);border-color:var(--border);color:var(--text3)';
+    const tip=ct.feito?`Contato em ${ct.data} — clique para desfazer`:'Marcar como contatado';
+    return `<div class="cro" style="${ct.feito?'background:rgba(16,185,129,.05)':''}">
+      <div style="display:flex;align-items:flex-start;gap:10px">
+        <button onclick="toggleDepContato('${c.external_id}');event.stopPropagation()"
+          title="${tip}"
+          style="flex-shrink:0;margin-top:2px;width:26px;height:26px;border-radius:6px;border:1.5px solid;cursor:pointer;font-size:13px;display:inline-flex;align-items:center;justify-content:center;transition:all .15s;${chkStyle}">
+          ${ct.feito?'✓':''}
+        </button>
+        <div>
+          <div class="cid">${cliNm(c.external_id)}</div>
+          <div style="font-size:10px;color:var(--text3);font-family:'JetBrains Mono',monospace;margin-bottom:1px">${c.external_id}</div>
+          <div class="cmeta">${c.analista} · ${c.qtd_dep_jun} dep. jun.</div>
+          <div class="cdt">Último: ${c.ultimo_dep} · ${c.dias_sem_dep} dias</div>
+          ${ct.feito&&ct.obs?`<div style="font-size:11px;color:#6ee7b7;font-style:italic;margin-top:2px">"${ct.obs}"</div>`:''}
+        </div>
+      </div>
       <div class="crr"><div class="cvv">${f(c.total_jun)}</div><div class="cltv">LTV ${f(c.ltv)}</div></div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
+}
+
+function toggleDepContato(clientId){
+  const cur=DEP_CONTACTS[String(clientId)]||{feito:false};
+  if(cur.feito){
+    DEP_CONTACTS[String(clientId)]={feito:false,data:'',obs:''};
+    localStorage.setItem('dep_contacts',JSON.stringify(DEP_CONTACTS));
+    renderDL();
+    _writeDepToSheets(clientId,false,'','',null);
+  }else{
+    openDepModal(clientId);
+  }
+}
+
+function openDepModal(clientId){
+  const client=dData.find(c=>String(c.external_id)===String(clientId));
+  if(!client)return;
+  _depModalClientId=clientId;
+  _depModalClient=client;
+  const cur=DEP_CONTACTS[String(clientId)]||{};
+  document.getElementById('dep-obs-info').innerHTML=
+    `<strong>${cliNm(clientId)}</strong> &nbsp;·&nbsp; ${client.analista}<br>`+
+    `<span style="color:var(--text2)">${client.categoria} · ${client.dias_sem_dep} dias sem dep.</span>`;
+  document.getElementById('dep-obs-txt').value=cur.obs||'';
+  document.getElementById('dep-obs-modal').style.display='flex';
+  setTimeout(()=>document.getElementById('dep-obs-txt').focus(),50);
+}
+
+function closeDepModal(){
+  document.getElementById('dep-obs-modal').style.display='none';
+  _depModalClientId=null;_depModalClient=null;
+}
+
+function confirmDepContato(){
+  if(!_depModalClientId)return;
+  const obs=document.getElementById('dep-obs-txt').value.trim();
+  const _now=new Date();
+  const dataContato=_now.toLocaleDateString('pt-BR')+' '+_now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  DEP_CONTACTS[String(_depModalClientId)]={feito:true,data:dataContato,obs};
+  localStorage.setItem('dep_contacts',JSON.stringify(DEP_CONTACTS));
+  _writeDepToSheets(_depModalClientId,true,dataContato,obs,_depModalClient);
+  closeDepModal();
+  renderDL();
+}
+
+function _writeDepToSheets(clientId,feito,dataContato,obs,client){
+  const url=localStorage.getItem('ch_gs_url');
+  if(!url)return;
+  const p=new URLSearchParams({
+    sheet_name:'Depositos',action:'set',
+    client_id:clientId, nome:cliNm(clientId),
+    analista:client?client.analista:'',
+    dias_sem_dep:client?client.dias_sem_dep:'',
+    categoria:client?client.categoria:'',
+    feito:feito?'TRUE':'FALSE',
+    data_contato:dataContato, observacao:obs
+  });
+  (new Image()).src=url+'?'+p.toString()+'&_t='+Date.now();
 }
 
 /* OVERVIEW */
@@ -2162,6 +2239,9 @@ const CH_PS = 15;
 let CH_CONTACTS = {};   // {ticket_id: {feito:bool, data:string, obs:string}}
 let chContatoFilter = 'all'; // 'all'|'pendente'|'feito'
 let _chModalTicketId = null;
+let DEP_CONTACTS = {};  // {external_id: {feito:bool, data:string, obs:string}}
+let _depModalClientId = null;
+let _depModalClient = null;
 
 const CH_COLORS = ['#2563eb','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899','#84cc16','#f97316','#6366f1','#14b8a6','#a855f7'];
 
@@ -2259,7 +2339,6 @@ function closeChModal() {
 function confirmChContato() {
   if (!_chModalTicketId) return;
   const obs = document.getElementById('ch-obs-txt').value.trim();
-  console.log('[CH confirm] ticketId:', _chModalTicketId, '| obs:', JSON.stringify(obs));
   const _now = new Date();
   const dataContato = _now.toLocaleDateString('pt-BR') + ' ' + _now.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
   CH_CONTACTS[String(_chModalTicketId)] = {feito:true, data:dataContato, obs};
@@ -2275,14 +2354,12 @@ function _writeChToSheets(ticketId, feito, dataContato, obs) {
   const ticket = CH.find(c => String(c.ticket_id) === String(ticketId));
   if (!ticket) return;
   const p = new URLSearchParams({
-    action:'set', ticket_id:ticketId,
+    sheet_name:'Chamados', action:'set', ticket_id:ticketId,
     cliente_id:ticket.cliente_id, gerente:ticket.gerente,
     dia:ticket.dia, mes:curMm||6, motivo:ticket.motivo||'',
     feito:feito?'TRUE':'FALSE', data_contato:dataContato, observacao:obs
   });
-  const fullUrl = url + '?' + p.toString() + '&_t=' + Date.now();
-  console.log('[CH Sheets] URL:', fullUrl);
-  (new Image()).src = fullUrl;
+  (new Image()).src = url + '?' + p.toString() + '&_t=' + Date.now();
 }
 
 function renderChContatoKPI() {
@@ -3648,11 +3725,12 @@ function renderGPTbl() {
 function sGPPg(p) { gpPg = p; renderGPTbl(); }
 
 try{const _cn=localStorage.getItem('dep_cli_names');if(_cn)CLI_NAMES=JSON.parse(_cn);}catch(e){}
+try{const _dc=localStorage.getItem('dep_contacts');if(_dc)DEP_CONTACTS=JSON.parse(_dc);}catch(e){}
 try{const _ca=localStorage.getItem('dep_carteira');if(_ca)CARTEIRA=JSON.parse(_ca);}catch(e){}
 const _initMM=parseInt(DD.split('/')[1]);updateDaySelects(JD,_initMM);
 if(loadSnap()){applyF();}else{renderTB();renderOV();renderAN();renderCT();}
 checkSession();
-document.addEventListener('keydown', e => { if(e.key==='Escape') closeChModal(); });
+document.addEventListener('keydown', e => { if(e.key==='Escape'){ closeChModal(); closeDepModal(); } });
 </script>
 <!-- Modal de observação de contato (Chamados) -->
 <div id="ch-obs-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9999;align-items:center;justify-content:center">
@@ -3665,6 +3743,20 @@ document.addEventListener('keydown', e => { if(e.key==='Escape') closeChModal();
     <div style="display:flex;gap:8px;margin-top:18px;justify-content:flex-end">
       <button onclick="closeChModal()" style="padding:8px 20px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);color:var(--text2);cursor:pointer;font-size:13px">Cancelar</button>
       <button onclick="confirmChContato()" style="padding:8px 20px;border-radius:8px;border:none;background:#10b981;color:#fff;cursor:pointer;font-size:13px;font-weight:700">✓ Confirmar Contato</button>
+    </div>
+  </div>
+</div>
+<!-- Modal de observação de contato (Clientes sem depositar) -->
+<div id="dep-obs-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:10000;align-items:center;justify-content:center">
+  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:26px 28px;width:440px;max-width:92vw;box-shadow:0 20px 60px rgba(0,0,0,.5)">
+    <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:6px">Registrar Contato</div>
+    <div id="dep-obs-info" style="font-size:12px;color:var(--text3);margin-bottom:18px;line-height:1.6"></div>
+    <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:6px">Observação</label>
+    <textarea id="dep-obs-txt" placeholder="Descreva como foi o contato, o que foi combinado…" rows="4"
+      style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:13px;resize:vertical;box-sizing:border-box;font-family:inherit;outline:none"></textarea>
+    <div style="display:flex;gap:8px;margin-top:18px;justify-content:flex-end">
+      <button onclick="closeDepModal()" style="padding:8px 20px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);color:var(--text2);cursor:pointer;font-size:13px">Cancelar</button>
+      <button onclick="confirmDepContato()" style="padding:8px 20px;border-radius:8px;border:none;background:#10b981;color:#fff;cursor:pointer;font-size:13px;font-weight:700">✓ Confirmar Contato</button>
     </div>
   </div>
 </div>
