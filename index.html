@@ -1112,8 +1112,9 @@ function renderYT(){
   const cbMap=new Map(CB.map(c=>[String(c.external_id),c.cashback]));
 
   document.getElementById('yest-tbl').innerHTML=`<table>
-    <thead><tr><th>#</th><th>ID Cliente</th><th>Analista</th><th>Classificação</th><th style="text-align:right">Dep. Ontem</th><th style="text-align:center">Qtd dep.</th><th style="text-align:right">Cashback</th><th style="text-align:right">LTV</th></tr></thead>
+    <thead><tr><th style="width:36px">✓</th><th>#</th><th>ID Cliente</th><th>Analista</th><th>Classificação</th><th style="text-align:right">Dep. Ontem</th><th style="text-align:center">Qtd dep.</th><th style="text-align:right">Cashback</th><th style="text-align:right">LTV</th></tr></thead>
     <tbody>${sl.map((c,i)=>{const cb=cbMap.get(String(c.external_id));return`<tr>
+      ${_chkBtn('ativos',c.external_id)}
       <td style="color:var(--text3);font-size:11px">${(yestPg-1)*YPS+i+1}</td>
       <td>${cliN(c.external_id)}</td>
       <td style="color:var(--text2)">${c.analista}</td>
@@ -1584,8 +1585,9 @@ function renderCT(){
   if(cliPg>pgs)cliPg=1;
   const sl=data.slice((cliPg-1)*PS,cliPg*PS);
   document.getElementById('cli-tbl').innerHTML=`<table>
-    <thead><tr><th>ID</th><th>Analista</th><th>Último dep.</th><th>Dias</th><th>Jun</th><th>Maio</th><th>LTV</th><th>Status</th></tr></thead>
+    <thead><tr><th style="width:36px">✓</th><th>ID</th><th>Analista</th><th>Último dep.</th><th>Dias</th><th>Jun</th><th>Maio</th><th>LTV</th><th>Status</th></tr></thead>
     <tbody>${sl.map(c=>`<tr>
+      ${_chkBtn('clientes',c.external_id)}
       <td>${cliN(c.external_id)}</td>
       <td style="color:var(--text2)">${c.analista}</td>
       <td style="font-family:'JetBrains Mono',monospace;font-size:11px">${c.ultimo_dep}</td>
@@ -2241,6 +2243,8 @@ let chContatoFilter = 'all'; // 'all'|'pendente'|'feito'
 let _chModalTicketId = null;
 let DEP_CONTACTS = {};  // {external_id: {feito:bool, data:string, obs:string}}
 let _depModalClientId = null;
+let CONTACTS = {};  // {section: {id: {feito:bool, data:string, obs:string}}}
+let _contactModal = null;
 let _depModalClient = null;
 
 const CH_COLORS = ['#2563eb','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899','#84cc16','#f97316','#6366f1','#14b8a6','#a855f7'];
@@ -2361,6 +2365,97 @@ function _writeChToSheets(ticketId, feito, dataContato, obs) {
   });
   (new Image()).src = url + '?' + p.toString() + '&_t=' + Date.now();
 }
+
+/* ── SISTEMA GENÉRICO DE CONTATOS ─────────────────────────── */
+function _getContact(section, id){ return (CONTACTS[section]||{})[String(id)]||{feito:false}; }
+function _saveContacts(){ try{localStorage.setItem('contacts_v2',JSON.stringify(CONTACTS));}catch(e){} }
+
+function _chkBtn(section, id){
+  const ct=_getContact(section,id);
+  const cs=ct.feito?'background:#10b981;border-color:#10b981;color:#fff':'background:var(--bg3);border-color:var(--border);color:var(--text3)';
+  const tip=ct.feito?`Contato em ${ct.data} — clique para desfazer`:'Marcar como contatado';
+  return `<td style="text-align:center;padding:4px"><button onclick="toggleContact('${section}','${id}');event.stopPropagation()" title="${tip}" style="width:26px;height:26px;border-radius:6px;border:1.5px solid;cursor:pointer;font-size:13px;display:inline-flex;align-items:center;justify-content:center;transition:all .15s;${cs}">${ct.feito?'✓':''}</button></td>`;
+}
+
+function toggleContact(section, id){
+  const cur=_getContact(section,id);
+  if(cur.feito){
+    if(!CONTACTS[section])CONTACTS[section]={};
+    CONTACTS[section][String(id)]={feito:false,data:'',obs:''};
+    _saveContacts(); _contactRerender(section);
+    _writeContactToSheets(section,id,false,'','');
+  }else{ openContactModal(section,id); }
+}
+
+function openContactModal(section, id){
+  _contactModal={section,id};
+  const client=_contactClient(section,id);
+  const cur=_getContact(section,id);
+  const analista=client?(client.analista||client.responsavel||''):'';
+  document.getElementById('contact-modal-info').innerHTML=
+    `<strong>${cliNm(id)}</strong>${analista?` &nbsp;·&nbsp; ${analista}`:''}`;
+  document.getElementById('contact-modal-txt').value=cur.obs||'';
+  document.getElementById('contact-modal').style.display='flex';
+  setTimeout(()=>document.getElementById('contact-modal-txt').focus(),50);
+}
+
+function closeContactModal(){
+  document.getElementById('contact-modal').style.display='none';
+  _contactModal=null;
+}
+
+function confirmContact(){
+  if(!_contactModal)return;
+  const {section,id}=_contactModal;
+  const obs=document.getElementById('contact-modal-txt').value.trim();
+  const _now=new Date();
+  const dataContato=_now.toLocaleDateString('pt-BR')+' '+_now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  if(!CONTACTS[section])CONTACTS[section]={};
+  CONTACTS[section][String(id)]={feito:true,data:dataContato,obs};
+  _saveContacts();
+  _writeContactToSheets(section,id,true,dataContato,obs);
+  closeContactModal();
+  _contactRerender(section);
+}
+
+function _contactClient(section, id){
+  const sid=String(id);
+  switch(section){
+    case 'ativos': return (YC||[]).find(c=>String(c.external_id)===sid);
+    case 'saques': return getSKFiltered().find(c=>String(c.external_id)===sid);
+    case 'cashback': return getCBFiltered().find(c=>String(c.external_id)===sid);
+    case 'torneios': return getTNFiltered().find(c=>String(c.external_id)===sid);
+    case 'grandesperdas': return getGPFiltered().find(c=>String(c.external_id)===sid);
+    case 'clientes': return gF().find(c=>String(c.external_id)===sid);
+    default: return null;
+  }
+}
+
+function _contactRerender(section){
+  switch(section){
+    case 'ativos': renderYT(); break;
+    case 'saques': renderSKTbl(); break;
+    case 'cashback': renderCBTbl(); break;
+    case 'torneios': renderTNTable(); break;
+    case 'grandesperdas': renderGPTbl(); break;
+    case 'clientes': renderCT(); break;
+  }
+}
+
+function _writeContactToSheets(section, id, feito, dataContato, obs){
+  const url=localStorage.getItem('ch_gs_url')||GS_SHEETS_URL;
+  if(!url)return;
+  const client=_contactClient(section,id);
+  const names={ativos:'Ativos',saques:'Saques',cashback:'CashBack',torneios:'Torneios',grandesperdas:'GrandesPerdas',clientes:'Clientes'};
+  const p=new URLSearchParams({
+    sheet_name:names[section]||section, action:'set',
+    client_id:id, nome:cliNm(id),
+    analista:client?(client.analista||client.responsavel||''):'',
+    feito:feito?'TRUE':'FALSE', data_contato:dataContato, observacao:obs
+  });
+  (new Image()).src=url+'?'+p.toString()+'&_t='+Date.now();
+}
+/* ─────────────────────────────────────────────────────────── */
 
 function renderChContatoKPI() {
   const el = document.getElementById('ch-contato-kpi');
@@ -2901,6 +2996,7 @@ function renderSKTbl() {
   document.getElementById('sk-tbl').innerHTML = `<table>
     <thead>
       <tr>
+        <th style="width:36px">✓</th>
         <th>ID Cliente</th><th>Data</th><th>Dia</th>
         <th style="text-align:right">Valor Saque</th>
         <th style="text-align:right">Dep. mesmo dia</th>
@@ -2923,6 +3019,7 @@ function renderSKTbl() {
               : 'background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.2);')
           : '';
         return `<tr style="${rowStyle}">
+          ${_chkBtn('saques',r.external_id)}
           <td>${cliN(r.external_id)}</td>
           <td style="font-size:11px;color:var(--text2)">${r.date}</td>
           <td style="color:var(--text);font-weight:600">${r.dia<10?'0'+r.dia:r.dia}/06</td>
@@ -3183,6 +3280,7 @@ function renderCBTbl() {
   document.getElementById('cb-tbl').innerHTML = `<table>
     <thead>
       <tr>
+        <th style="width:36px">✓</th>
         <th>#</th><th>ID Cliente</th><th>Analista</th>
         <th style="text-align:right">Cashback</th>
         <th style="text-align:right" id="cb-dep-th">Dep. D-1</th>
@@ -3192,6 +3290,7 @@ function renderCBTbl() {
     </thead>
     <tbody>
       ${sl.map((r, i) => `<tr>
+        ${_chkBtn('cashback',r.external_id)}
         <td style="color:var(--text3);font-size:11px">${(cbPg-1)*CB_PS+i+1}</td>
         <td>${cliN(r.external_id)}</td>
         <td style="color:var(--text2)">${r.analista}</td>
@@ -3347,6 +3446,7 @@ function renderTNTable() {
   const hasDt   = data.some(r => r.data_enc);
   document.getElementById('tn-tbl').innerHTML = `<table>
     <thead><tr>
+      <th style="width:36px">✓</th>
       <th style="width:48px">Pos.</th>
       <th>ID Cliente</th>
       ${hasDual?'<th style="text-align:center;width:64px">Dual</th>':''}
@@ -3360,6 +3460,7 @@ function renderTNTable() {
       const barPct  = r.score > 0 ? (r.score / maxScore * 100).toFixed(1) : 0;
       const barCol  = realPos === 1 ? '#f59e0b' : realPos === 2 ? '#94a3b8' : realPos === 3 ? '#b45309' : '#2563eb';
       return `<tr style="${!r.ativo?'opacity:.45':''}">
+        ${_chkBtn('torneios',r.external_id)}
         <td style="font-weight:800;font-size:13px;color:${posColor(r.posicao)};text-align:center">
           ${medalIcon(r.posicao)|| `<span style="font-size:12px">${r.posicao}º</span>`}
         </td>
@@ -3695,6 +3796,7 @@ function renderGPTbl() {
 
   document.getElementById('gp-tbl').innerHTML = `<table>
     <thead><tr>
+      <th style="width:36px">✓</th>
       <th>ID Cliente</th><th>Dia</th><th>Analista</th>
       <th style="text-align:right">Depósito</th>
       <th style="text-align:right">Saque</th>
@@ -3707,6 +3809,7 @@ function renderGPTbl() {
         : Math.abs(r.net) >= 5000  ? 'background:rgba(245,158,11,.04);' : ''
         : '';
       return `<tr style="${rowBg}">
+        ${_chkBtn('grandesperdas',r.external_id)}
         <td>${cliN(r.external_id)}</td>
         <td style="color:var(--text);font-weight:600">${r.dia<10?'0'+r.dia:r.dia}/06</td>
         <td style="color:var(--text2)">${r.analista}</td>
@@ -3726,11 +3829,12 @@ function sGPPg(p) { gpPg = p; renderGPTbl(); }
 
 try{const _cn=localStorage.getItem('dep_cli_names');if(_cn)CLI_NAMES=JSON.parse(_cn);}catch(e){}
 try{const _dc=localStorage.getItem('dep_contacts');if(_dc)DEP_CONTACTS=JSON.parse(_dc);}catch(e){}
+try{const _cv=localStorage.getItem('contacts_v2');if(_cv)CONTACTS=JSON.parse(_cv);}catch(e){}
 try{const _ca=localStorage.getItem('dep_carteira');if(_ca)CARTEIRA=JSON.parse(_ca);}catch(e){}
 const _initMM=parseInt(DD.split('/')[1]);updateDaySelects(JD,_initMM);
 if(loadSnap()){applyF();}else{renderTB();renderOV();renderAN();renderCT();}
 checkSession();
-document.addEventListener('keydown', e => { if(e.key==='Escape'){ closeChModal(); closeDepModal(); } });
+document.addEventListener('keydown', e => { if(e.key==='Escape'){ closeChModal(); closeDepModal(); closeContactModal(); } });
 </script>
 <!-- Modal de observação de contato (Chamados) -->
 <div id="ch-obs-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9999;align-items:center;justify-content:center">
@@ -3743,6 +3847,20 @@ document.addEventListener('keydown', e => { if(e.key==='Escape'){ closeChModal()
     <div style="display:flex;gap:8px;margin-top:18px;justify-content:flex-end">
       <button onclick="closeChModal()" style="padding:8px 20px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);color:var(--text2);cursor:pointer;font-size:13px">Cancelar</button>
       <button onclick="confirmChContato()" style="padding:8px 20px;border-radius:8px;border:none;background:#10b981;color:#fff;cursor:pointer;font-size:13px;font-weight:700">✓ Confirmar Contato</button>
+    </div>
+  </div>
+</div>
+<!-- Modal genérico de contato (Ativos, Saques, CashBack, Torneios, Grandes Perdas, Clientes) -->
+<div id="contact-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:10000;align-items:center;justify-content:center">
+  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:26px 28px;width:440px;max-width:92vw;box-shadow:0 20px 60px rgba(0,0,0,.5)">
+    <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:6px">Registrar Contato</div>
+    <div id="contact-modal-info" style="font-size:12px;color:var(--text3);margin-bottom:18px;line-height:1.6"></div>
+    <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:6px">Observação</label>
+    <textarea id="contact-modal-txt" placeholder="Descreva como foi o contato…" rows="4"
+      style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:13px;resize:vertical;box-sizing:border-box;font-family:inherit;outline:none"></textarea>
+    <div style="display:flex;gap:8px;margin-top:18px;justify-content:flex-end">
+      <button onclick="closeContactModal()" style="padding:8px 20px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);color:var(--text2);cursor:pointer;font-size:13px">Cancelar</button>
+      <button onclick="confirmContact()" style="padding:8px 20px;border-radius:8px;border:none;background:#10b981;color:#fff;cursor:pointer;font-size:13px;font-weight:700">✓ Confirmar Contato</button>
     </div>
   </div>
 </div>
