@@ -2219,22 +2219,7 @@ function updateChGsStatus() {
 async function loadChContacts() {
   const local = localStorage.getItem('ch_contacts');
   if (local) { try { CH_CONTACTS = JSON.parse(local); } catch(e) {} }
-  const url = localStorage.getItem('ch_gs_url');
-  if (!url) { renderChContatoKPI(); renderChTbl(); return; }
-  try {
-    const res = await fetch(url + '?action=get', {cache:'no-cache'});
-    const data = await res.json();
-    data.forEach(row => {
-      if (!row.ticket_id) return;
-      const feito = row.feito === true || String(row.feito).toUpperCase() === 'TRUE' || row.feito === 1;
-      CH_CONTACTS[String(row.ticket_id)] = {feito, data: row.data_contato || ''};
-    });
-    localStorage.setItem('ch_contacts', JSON.stringify(CH_CONTACTS));
-    renderChContatoKPI(); renderChTbl();
-  } catch(e) {
-    console.warn('[CH] Sheets sync error:', e);
-    renderChContatoKPI(); renderChTbl();
-  }
+  renderChContatoKPI(); renderChTbl();
 }
 
 async function toggleChContato(ticketId) {
@@ -2249,7 +2234,7 @@ async function toggleChContato(ticketId) {
   if (!url || !ticket) return;
   try {
     const p = new URLSearchParams({action:'set',ticket_id:ticketId,cliente_id:ticket.cliente_id,gerente:ticket.gerente,dia:ticket.dia,mes:curMm||6,motivo:ticket.motivo||'',feito:feito?'TRUE':'FALSE',data_contato:dataContato});
-    await fetch(url + '?' + p.toString(), {cache:'no-cache'});
+    fetch(url + '?' + p.toString(), {mode:'no-cors',cache:'no-cache'});
   } catch(e) { console.warn('[CH] Sheets write error:', e); }
 }
 
