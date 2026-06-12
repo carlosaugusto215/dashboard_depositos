@@ -2237,7 +2237,8 @@ async function loadChContacts() {
   }
 }
 
-async function toggleChContato(ticketId, clienteId, gerente, dia, motivo) {
+async function toggleChContato(ticketId) {
+  const ticket = CH.find(c => String(c.ticket_id) === String(ticketId));
   const cur = CH_CONTACTS[String(ticketId)] || {feito:false};
   const feito = !cur.feito;
   const dataContato = feito ? new Date().toLocaleDateString('pt-BR') : '';
@@ -2245,9 +2246,9 @@ async function toggleChContato(ticketId, clienteId, gerente, dia, motivo) {
   localStorage.setItem('ch_contacts', JSON.stringify(CH_CONTACTS));
   renderChContatoKPI(); renderChTbl();
   const url = localStorage.getItem('ch_gs_url');
-  if (!url) return;
+  if (!url || !ticket) return;
   try {
-    const p = new URLSearchParams({action:'set',ticket_id:ticketId,cliente_id:clienteId,gerente,dia,mes:curMm||6,motivo,feito:feito?'TRUE':'FALSE',data_contato:dataContato});
+    const p = new URLSearchParams({action:'set',ticket_id:ticketId,cliente_id:ticket.cliente_id,gerente:ticket.gerente,dia:ticket.dia,mes:curMm||6,motivo:ticket.motivo||'',feito:feito?'TRUE':'FALSE',data_contato:dataContato});
     await fetch(url + '?' + p.toString(), {cache:'no-cache'});
   } catch(e) { console.warn('[CH] Sheets write error:', e); }
 }
@@ -2496,7 +2497,7 @@ function renderChTbl() {
           : 'background:var(--bg3);border-color:var(--border);color:var(--text3)';
         return `<tr style="${rowBg}">
           <td style="text-align:center;padding:4px">
-            <button onclick="toggleChContato('${c.ticket_id}','${c.cliente_id}','${c.gerente.replace(/'/g,'\\'')}',${c.dia},'${c.motivo.replace(/'/g,'\\'')}');event.stopPropagation()"
+            <button onclick="toggleChContato('${c.ticket_id}');event.stopPropagation()"
               title="${ct.feito ? 'Contato feito em '+ct.data+' — clique para desfazer' : 'Marcar como contatado'}"
               style="width:26px;height:26px;border-radius:6px;border:1.5px solid;cursor:pointer;font-size:13px;display:inline-flex;align-items:center;justify-content:center;transition:all .15s;${checkStyle}">
               ${ct.feito ? '✓' : ''}
