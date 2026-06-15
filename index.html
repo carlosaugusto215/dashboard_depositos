@@ -309,6 +309,10 @@ tr:last-child td{border-bottom:none}
     <div class="ni" onclick="goTo('tendencia',this)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Tendência
     </div>
+    <div class="sb-sec">Gerência</div>
+    <div class="ni" onclick="goTo('indicadores',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Indicadores
+    </div>
   </nav>
   <div class="sb-ft">
     <button class="imp-btn" onclick="document.getElementById('finp').click()">
@@ -901,6 +905,53 @@ tr:last-child td{border-bottom:none}
     </div>
     <div id="cc-tbl"></div>
     <div id="cc-pag" style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;font-size:11px;color:var(--text3)"></div>
+  </div>
+</div>
+<div class="pg" id="pg-indicadores">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px">
+    <div>
+      <div style="font-size:18px;font-weight:700;color:var(--text)">Indicadores de Contato</div>
+      <div style="font-size:12px;color:var(--text3);margin-top:3px">Consolidado da planilha · atualizado às <span id="ind-upd-time">—</span></div>
+    </div>
+    <button onclick="renderIndicadores()" id="ind-refresh-btn" style="padding:8px 16px;border-radius:8px;background:var(--bg3);border:1px solid var(--border);color:var(--text2);cursor:pointer;font-size:12px;display:flex;align-items:center;gap:6px;transition:all .15s">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>Atualizar
+    </button>
+  </div>
+  <div class="card" style="margin-bottom:16px;padding:12px 18px">
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <span style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.08em">Filtros</span>
+      <select class="sel" id="ind-sec-filter" onchange="_indSetSec(this.value)">
+        <option value="">Todas as seções</option>
+        <option>Chamados</option><option>Depositos</option><option>Ativos</option><option>Saques</option>
+        <option>CashBack</option><option>Torneios</option><option>GrandesPerdas</option><option>Clientes</option>
+      </select>
+      <select class="sel" id="ind-ana-filter" onchange="_indSetAna(this.value)">
+        <option value="">Todos os analistas</option>
+      </select>
+    </div>
+  </div>
+  <div id="ind-loading" style="text-align:center;padding:70px 0">
+    <div style="font-size:48px;margin-bottom:14px;opacity:.2">📊</div>
+    <div style="font-size:14px;color:var(--text3)">Clique em <strong style="color:var(--text2)">Atualizar</strong> para carregar os dados da planilha</div>
+  </div>
+  <div id="ind-content" style="display:none">
+    <div class="kg" id="ind-kpis" style="margin-bottom:16px"></div>
+    <div style="display:grid;grid-template-columns:1.35fr 1fr;gap:14px;margin-bottom:16px">
+      <div class="card">
+        <div class="ch"><div class="ct">Contatos por Seção</div><div class="cs">feitos vs pendentes</div></div>
+        <div style="height:220px;position:relative"><canvas id="ind-sec-chart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="ch"><div class="ct">Evolução Diária</div><div class="cs">contatos feitos por dia</div></div>
+        <div style="height:220px;position:relative"><canvas id="ind-evo-chart"></canvas></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="ch">
+        <div><div class="ct">Por Analista</div><div class="cs">feitos / registrados por seção</div></div>
+      </div>
+      <div id="ind-ana-tbl" style="overflow-x:auto"></div>
+    </div>
   </div>
 </div>
 </main>
@@ -1805,7 +1856,7 @@ function goTo(id,el){
   document.querySelectorAll('.ni').forEach(n=>n.classList.remove('on'));
   document.getElementById('pg-'+id).classList.add('on');
   el.classList.add('on');
-  document.getElementById('tb-pg').textContent={overview:'Depósitos',ativos:'Ativos Ontem',chamados:'Chamados',saques:'Saques',cashback:'CashBack',torneios:'Torneios',grandesperdas:'Grandes Perdas',carteira:'Carteira de Clientes',analistas:'Por Analista',clientes:'Clientes',tendencia:'Tendência'}[id];
+  document.getElementById('tb-pg').textContent={overview:'Depósitos',ativos:'Ativos Ontem',chamados:'Chamados',saques:'Saques',cashback:'CashBack',torneios:'Torneios',grandesperdas:'Grandes Perdas',carteira:'Carteira de Clientes',analistas:'Por Analista',clientes:'Clientes',tendencia:'Tendência',indicadores:'Indicadores'}[id];
   if(id==='grandesperdas'){renderGrandesPerdas();}
   if(id==='carteira'){renderCarteira();}
   if(id==='torneios'){renderTorneios();}
@@ -1815,6 +1866,7 @@ function goTo(id,el){
   if(id==='ativos'){renderYKPIs();renderYT();}
   if(id==='tendencia')renderTR();
   if(id==='analistas')renderAN();
+  if(id==='indicadores'&&Object.keys(_indRaw).length===0)renderIndicadores();
 }
 
 /* IMPORT EXCEL */
@@ -3826,6 +3878,159 @@ function renderGPTbl() {
   document.getElementById('gp-pag').innerHTML = `<span>${(gpPg-1)*GP_PS+1}–${Math.min(gpPg*GP_PS,tot)} de ${tot} registros</span><div class="pbr">${btns}</div>`;
 }
 function sGPPg(p) { gpPg = p; renderGPTbl(); }
+
+/* INDICADORES */
+let _indRaw = {};
+let _indSecFilter = '';
+let _indAnaFilter = '';
+let _indChartSec = null;
+let _indChartEvo = null;
+
+async function _gsGet(sheetName) {
+  try {
+    const res = await fetch(GS_SHEETS_URL + '?action=get&sheet_name=' + encodeURIComponent(sheetName) + '&_t=' + Date.now());
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  } catch(e) {
+    console.warn('[IND] Erro ao buscar', sheetName, ':', e.message);
+    return [];
+  }
+}
+
+async function renderIndicadores() {
+  const loading = document.getElementById('ind-loading');
+  const content = document.getElementById('ind-content');
+  const btn = document.getElementById('ind-refresh-btn');
+  loading.style.display = 'block';
+  loading.innerHTML = '<div style="font-size:40px;margin-bottom:14px;opacity:.2">⋯</div><div style="font-size:14px;color:var(--text3)">Carregando dados da planilha…</div><div style="font-size:11px;color:var(--text3);margin-top:6px;opacity:.6">Aguarde, isso pode levar alguns segundos</div>';
+  content.style.display = 'none';
+  if (btn) btn.disabled = true;
+  const sheets = ['Chamados','Depositos','Ativos','Saques','CashBack','Torneios','GrandesPerdas','Clientes'];
+  const results = await Promise.all(sheets.map(s => _gsGet(s)));
+  _indRaw = {};
+  sheets.forEach((s, i) => { _indRaw[s] = results[i]; });
+  if (btn) btn.disabled = false;
+  const now = new Date();
+  const uptEl = document.getElementById('ind-upd-time');
+  if (uptEl) uptEl.textContent = now.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+  loading.style.display = 'none';
+  content.style.display = 'block';
+  _buildInd();
+}
+
+function _buildInd() {
+  const sheets = ['Chamados','Depositos','Ativos','Saques','CashBack','Torneios','GrandesPerdas','Clientes'];
+  let allRows = [];
+  sheets.forEach(s => {
+    (_indRaw[s] || []).forEach(r => {
+      const feito = r.feito === true || r.feito === 'TRUE' || r.feito === 'true';
+      const analista = String(r.analista || r.gerente || '').trim() || 'N/A';
+      const dateStr = r.data_contato ? String(r.data_contato).split(' ')[0] : '';
+      allRows.push({ sheet: s, feito, analista, dateStr });
+    });
+  });
+  const filtered = allRows.filter(r => {
+    if (_indSecFilter && r.sheet !== _indSecFilter) return false;
+    if (_indAnaFilter && r.analista !== _indAnaFilter) return false;
+    return true;
+  });
+  const feitos = filtered.filter(r => r.feito).length;
+  const total = filtered.length;
+  const pendentes = total - feitos;
+  const taxa = total > 0 ? Math.round(feitos / total * 100) : 0;
+  const hojeStr = new Date().toLocaleDateString('pt-BR');
+  const hojeCount = filtered.filter(r => r.feito && r.dateStr === hojeStr).length;
+  document.getElementById('ind-kpis').innerHTML =
+    `<div class="kc tl"><div class="kl">Total Contatos</div><div class="kv">${feitos}</div><div class="kf">registros com contato</div></div>`+
+    `<div class="kc gn"><div class="kl">Taxa de Contato</div><div class="kv">${taxa}%</div><div class="kf">de ${total} registros</div></div>`+
+    `<div class="kc rd"><div class="kl">Pendentes</div><div class="kv">${pendentes}</div><div class="kf">sem contato</div></div>`+
+    `<div class="kc am"><div class="kl">Hoje</div><div class="kv">${hojeCount}</div><div class="kf">contatos em ${hojeStr}</div></div>`;
+  const analistas = [...new Set(allRows.map(r => r.analista).filter(a => a && a !== 'N/A'))].sort();
+  const anaEl = document.getElementById('ind-ana-filter');
+  anaEl.innerHTML = '<option value="">Todos os analistas</option>' + analistas.map(a => `<option value="${a}"${a===_indAnaFilter?' selected':''}>${a}</option>`).join('');
+  const secStats = {};
+  sheets.forEach(s => {
+    const rows = allRows.filter(r => r.sheet === s && (!_indAnaFilter || r.analista === _indAnaFilter));
+    secStats[s] = { feitos: rows.filter(r => r.feito).length, total: rows.length };
+  });
+  const ctx1 = document.getElementById('ind-sec-chart');
+  if (_indChartSec) { _indChartSec.destroy(); _indChartSec = null; }
+  _indChartSec = new Chart(ctx1, {
+    type: 'bar',
+    data: {
+      labels: sheets,
+      datasets: [
+        { label: 'Contatados', data: sheets.map(s => secStats[s].feitos), backgroundColor: '#10b981', borderRadius: 4 },
+        { label: 'Pendentes',  data: sheets.map(s => secStats[s].total - secStats[s].feitos), backgroundColor: 'rgba(239,68,68,.45)', borderRadius: 4 }
+      ]
+    },
+    options: { responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ labels:{ color:'#7c8fa8', font:{size:11}, boxWidth:10 } } },
+      scales:{
+        x:{ stacked:true, grid:{color:'#252a3d'}, ticks:{color:'#7c8fa8', font:{size:10}} },
+        y:{ stacked:true, beginAtZero:true, grid:{color:'#252a3d'}, ticks:{color:'#7c8fa8', font:{size:10}} }
+      }
+    }
+  });
+  const dayMap = {};
+  filtered.filter(r => r.feito && r.dateStr).forEach(r => { dayMap[r.dateStr] = (dayMap[r.dateStr]||0) + 1; });
+  const days = Object.keys(dayMap).sort((a, b) => {
+    const pa = a.split('/'), pb = b.split('/');
+    return new Date(+pa[2],+pa[1]-1,+pa[0]) - new Date(+pb[2],+pb[1]-1,+pb[0]);
+  });
+  const ctx2 = document.getElementById('ind-evo-chart');
+  if (_indChartEvo) { _indChartEvo.destroy(); _indChartEvo = null; }
+  _indChartEvo = new Chart(ctx2, {
+    type: 'line',
+    data: { labels: days, datasets: [{ label:'Contatos', data: days.map(d => dayMap[d]),
+      borderColor:'#00e5c0', backgroundColor:'rgba(0,229,192,.1)',
+      tension:0.3, fill:true, pointRadius:4, pointBackgroundColor:'#00e5c0' }] },
+    options: { responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ labels:{ color:'#7c8fa8', font:{size:11}, boxWidth:10 } } },
+      scales:{
+        x:{ grid:{color:'#252a3d'}, ticks:{color:'#7c8fa8', font:{size:10}} },
+        y:{ beginAtZero:true, grid:{color:'#252a3d'}, ticks:{color:'#7c8fa8', font:{size:10}} }
+      }
+    }
+  });
+  const colsToShow = _indSecFilter ? [_indSecFilter] : sheets;
+  const analistasF = analistas.filter(a => !_indAnaFilter || a === _indAnaFilter);
+  let tbl = '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px;min-width:600px">';
+  tbl += '<thead><tr style="border-bottom:1px solid var(--border)">';
+  tbl += '<th style="text-align:left;padding:9px 12px;color:var(--text3);font-weight:600;white-space:nowrap">Analista</th>';
+  colsToShow.forEach(s => { tbl += `<th style="text-align:center;padding:9px 8px;color:var(--text3);font-weight:600;white-space:nowrap;font-size:11px">${s}</th>`; });
+  tbl += '<th style="text-align:center;padding:9px 12px;color:var(--text3);font-weight:600">Total</th>';
+  tbl += '<th style="text-align:center;padding:9px 12px;color:var(--text3);font-weight:600">Taxa</th></tr></thead><tbody>';
+  analistasF.forEach(ana => {
+    let totF = 0, totT = 0;
+    const cells = {};
+    colsToShow.forEach(s => {
+      const rows = allRows.filter(r => r.sheet === s && r.analista === ana);
+      const f = rows.filter(r => r.feito).length;
+      const t = rows.length;
+      cells[s] = {f, t}; totF += f; totT += t;
+    });
+    const taxa2 = totT > 0 ? Math.round(totF/totT*100) : 0;
+    const txColor = taxa2 >= 80 ? 'var(--ok)' : taxa2 >= 50 ? 'var(--meta)' : taxa2 > 0 ? 'var(--crit)' : 'var(--text3)';
+    tbl += '<tr style="border-bottom:1px solid var(--border)">';
+    tbl += `<td style="padding:9px 12px;color:var(--text);font-weight:500;white-space:nowrap">${ana}</td>`;
+    colsToShow.forEach(s => {
+      const c = cells[s];
+      tbl += `<td style="text-align:center;padding:9px 8px;color:${c.f>0?'var(--teal)':'var(--text3)'}">${c.t>0?c.f+'/'+c.t:'—'}</td>`;
+    });
+    tbl += `<td style="text-align:center;padding:9px 12px;color:var(--text);font-weight:700">${totF}</td>`;
+    tbl += `<td style="text-align:center;padding:9px 12px;font-weight:700;color:${txColor}">${totT>0?taxa2+'%':'—'}</td>`;
+    tbl += '</tr>';
+  });
+  if (analistasF.length === 0) {
+    tbl += `<tr><td colspan="${colsToShow.length+3}" style="text-align:center;padding:40px;color:var(--text3)">Nenhum dado encontrado</td></tr>`;
+  }
+  tbl += '</tbody></table></div>';
+  document.getElementById('ind-ana-tbl').innerHTML = tbl;
+}
+
+function _indSetSec(v) { _indSecFilter = v; if (Object.keys(_indRaw).length > 0) _buildInd(); }
+function _indSetAna(v) { _indAnaFilter = v; if (Object.keys(_indRaw).length > 0) _buildInd(); }
 
 try{const _cn=localStorage.getItem('dep_cli_names');if(_cn)CLI_NAMES=JSON.parse(_cn);}catch(e){}
 try{const _dc=localStorage.getItem('dep_contacts');if(_dc)DEP_CONTACTS=JSON.parse(_dc);}catch(e){}
