@@ -910,8 +910,8 @@ tr:last-child td{border-bottom:none}
 <div class="pg" id="pg-indicadores">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px">
     <div>
-      <div style="font-size:18px;font-weight:700;color:var(--text)">Indicadores de Contato</div>
-      <div style="font-size:12px;color:var(--text3);margin-top:3px">Consolidado da planilha · atualizado às <span id="ind-upd-time">—</span></div>
+      <div style="font-size:18px;font-weight:700;color:var(--text)">Indicadores — Chamados</div>
+      <div style="font-size:12px;color:var(--text3);margin-top:3px">Contatos registrados · atualizado às <span id="ind-upd-time">—</span></div>
     </div>
     <button onclick="renderIndicadores()" id="ind-refresh-btn" style="padding:8px 16px;border-radius:8px;background:var(--bg3);border:1px solid var(--border);color:var(--text2);cursor:pointer;font-size:12px;display:flex;align-items:center;gap:6px;transition:all .15s">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>Atualizar
@@ -920,19 +920,14 @@ tr:last-child td{border-bottom:none}
   <div class="card" style="margin-bottom:16px;padding:12px 18px">
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <span style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.08em">Filtros</span>
-      <select class="sel" id="ind-sec-filter" onchange="_indSetSec(this.value)">
-        <option value="">Todas as seções</option>
-        <option>Chamados</option><option>Depositos</option><option>Ativos</option><option>Saques</option>
-        <option>CashBack</option><option>Torneios</option><option>GrandesPerdas</option><option>Clientes</option>
-      </select>
-      <select class="sel" id="ind-ana-filter" onchange="_indSetAna(this.value)">
-        <option value="">Todos os analistas</option>
+      <select class="sel" id="ind-ger-filter" onchange="_indSetGer(this.value)">
+        <option value="">Todos os gerentes</option>
       </select>
       <span style="font-size:11px;color:var(--text3)">Período:</span>
       <input type="date" id="ind-date-de" onchange="_indBuild()" style="background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:5px 10px;border-radius:var(--r);font-size:12px;cursor:pointer;outline:none;color-scheme:dark">
       <span style="font-size:11px;color:var(--text3)">até</span>
       <input type="date" id="ind-date-ate" onchange="_indBuild()" style="background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:5px 10px;border-radius:var(--r);font-size:12px;cursor:pointer;outline:none;color-scheme:dark">
-      <button onclick="_indClearDates()" style="padding:5px 10px;border-radius:var(--r);border:1px solid var(--border);background:var(--bg3);color:var(--text3);cursor:pointer;font-size:11px">Limpar</button>
+      <button onclick="_indClearDates()" style="padding:5px 10px;border-radius:var(--r);border:1px solid var(--border);background:var(--bg3);color:var(--text3);cursor:pointer;font-size:11px">Limpar datas</button>
     </div>
   </div>
   <div id="ind-loading" style="text-align:center;padding:70px 0">
@@ -941,21 +936,19 @@ tr:last-child td{border-bottom:none}
   </div>
   <div id="ind-content" style="display:none">
     <div class="kg" id="ind-kpis" style="margin-bottom:16px"></div>
-    <div style="display:grid;grid-template-columns:1.35fr 1fr;gap:14px;margin-bottom:16px">
+    <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:14px;margin-bottom:16px">
       <div class="card">
-        <div class="ch"><div class="ct">Contatos por Seção</div><div class="cs">feitos vs pendentes</div></div>
-        <div style="height:220px;position:relative"><canvas id="ind-sec-chart"></canvas></div>
+        <div class="ch"><div class="ct">Por Gerente</div><div class="cs">feitos vs pendentes</div></div>
+        <div style="height:240px;position:relative"><canvas id="ind-ger-chart"></canvas></div>
       </div>
       <div class="card">
-        <div class="ch"><div class="ct">Evolução Diária</div><div class="cs">contatos feitos por dia</div></div>
-        <div style="height:220px;position:relative"><canvas id="ind-evo-chart"></canvas></div>
+        <div class="ch"><div class="ct">Evolução Diária</div><div class="cs">contatos feitos por data</div></div>
+        <div style="height:240px;position:relative"><canvas id="ind-evo-chart"></canvas></div>
       </div>
     </div>
     <div class="card">
-      <div class="ch">
-        <div><div class="ct">Por Analista</div><div class="cs">feitos / registrados por seção</div></div>
-      </div>
-      <div id="ind-ana-tbl" style="overflow-x:auto"></div>
+      <div class="ch"><div class="ct">Detalhamento por Gerente</div><div class="cs">feitos / total · pendentes · taxa</div></div>
+      <div id="ind-ger-tbl" style="overflow-x:auto"></div>
     </div>
   </div>
 </div>
@@ -3890,11 +3883,10 @@ function renderGPTbl() {
 }
 function sGPPg(p) { gpPg = p; renderGPTbl(); }
 
-/* INDICADORES */
+/* INDICADORES — Chamados */
 let _indRaw = {};
-let _indSecFilter = '';
-let _indAnaFilter = '';
-let _indChartSec = null;
+let _indGerFilter = '';
+let _indChartGer = null;
 let _indChartEvo = null;
 
 async function _gsGet(sheetName) {
@@ -3916,31 +3908,13 @@ async function renderIndicadores() {
   loading.innerHTML = '<div style="font-size:40px;margin-bottom:14px;opacity:.2">⋯</div><div style="font-size:14px;color:var(--text3)">Carregando dados da planilha…</div><div style="font-size:11px;color:var(--text3);margin-top:6px;opacity:.6">Aguarde, isso pode levar alguns segundos</div>';
   content.style.display = 'none';
   if (btn) btn.disabled = true;
-  const sheets = ['Chamados','Depositos','Ativos','Saques','CashBack','Torneios','GrandesPerdas','Clientes'];
-  const results = await Promise.all(sheets.map(s => _gsGet(s)));
-  _indRaw = {};
-  sheets.forEach((s, i) => { _indRaw[s] = results[i]; });
+  _indRaw.Chamados = await _gsGet('Chamados');
   if (btn) btn.disabled = false;
-  const now = new Date();
   const uptEl = document.getElementById('ind-upd-time');
-  if (uptEl) uptEl.textContent = now.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+  if (uptEl) uptEl.textContent = new Date().toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
   loading.style.display = 'none';
   content.style.display = 'block';
   _buildInd();
-}
-
-function _indLocalTotals() {
-  const add = (map, key, n) => { map[key] = (map[key]||0) + n; };
-  const byAna = { Chamados:{}, Depositos:{}, Ativos:{}, Saques:{}, CashBack:{}, Torneios:{}, GrandesPerdas:{}, Clientes:{} };
-  const totals = { Chamados:0, Depositos:0, Ativos:0, Saques:0, CashBack:0, Torneios:0, GrandesPerdas:0, Clientes:0 };
-  (CH||[]).forEach(t => { const a=String(t.gerente||'N/A'); add(byAna.Chamados,a,1); totals.Chamados++; });
-  (CL||[]).forEach(c => { const a=String(c.analista||'N/A'); add(byAna.Depositos,a,1); totals.Depositos++; add(byAna.Clientes,a,1); totals.Clientes++; });
-  (YC||[]).forEach(c => { const a=String(c.analista||'N/A'); add(byAna.Ativos,a,1); totals.Ativos++; });
-  (SK||[]).forEach(c => { const a=String(c.analista||'N/A'); add(byAna.Saques,a,1); totals.Saques++; });
-  (CB||[]).forEach(c => { const a=String(c.analista||'N/A'); add(byAna.CashBack,a,1); totals.CashBack++; });
-  (TN||[]).forEach(c => { const a=String(c.analista||'N/A'); add(byAna.Torneios,a,1); totals.Torneios++; });
-  (GP||[]).forEach(c => { const a=String(c.analista||'N/A'); add(byAna.GrandesPerdas,a,1); totals.GrandesPerdas++; });
-  return { totals, byAna };
 }
 
 function _indParseDDMM(ddmmyyyy) {
@@ -3949,9 +3923,9 @@ function _indParseDDMM(ddmmyyyy) {
   return p.length === 3 ? new Date(+p[2], +p[1]-1, +p[0]) : null;
 }
 
-function _indBuild() { if (Object.keys(_indRaw).length > 0) _buildInd(); }
+function _indBuild() { if (_indRaw.Chamados) _buildInd(); }
 
-function _buildInd() {
+function _buildInd_OLD_REMOVED() {
   const sheets = ['Chamados','Depositos','Ativos','Saques','CashBack','Torneios','GrandesPerdas','Clientes'];
   const { totals: localTotals, byAna: localByAna } = _indLocalTotals();
 
@@ -4111,8 +4085,115 @@ function _buildInd() {
   document.getElementById('ind-ana-tbl').innerHTML=tbl;
 }
 
-function _indSetSec(v) { _indSecFilter = v; _indBuild(); }
-function _indSetAna(v) { _indAnaFilter = v; _indBuild(); }
+function _buildInd() {
+  const deVal = (document.getElementById('ind-date-de')||{}).value || '';
+  const ateVal = (document.getElementById('ind-date-ate')||{}).value || '';
+  const fromDate = deVal ? new Date(deVal) : null;
+  const toDate = ateVal ? new Date(ateVal + 'T23:59:59') : null;
+  const inDateRange = (ddmm) => {
+    if (!fromDate && !toDate) return true;
+    const d = _indParseDDMM(ddmm);
+    if (!d) return false;
+    if (fromDate && d < fromDate) return false;
+    if (toDate && d > toDate) return false;
+    return true;
+  };
+
+  // Mapa de contatados: { ticket_id → { gerente, dateStr } }
+  const contacted = {};
+  (_indRaw.Chamados||[]).forEach(r => {
+    const feito = r.feito===true||r.feito==='TRUE'||r.feito==='true';
+    const id = String(r.ticket_id||''); if(!id) return;
+    const gerente = String(r.gerente||'').trim()||'N/A';
+    const dateStr = r.data_contato?String(r.data_contato).split(' ')[0]:'';
+    if(feito) contacted[id]={gerente,dateStr};
+    else delete contacted[id];
+  });
+  Object.entries(CH_CONTACTS||{}).forEach(([tid,c])=>{
+    if(c.feito&&!contacted[tid]){
+      const t=(CH||[]).find(x=>String(x.ticket_id)===String(tid));
+      if(t) contacted[tid]={gerente:String(t.gerente||'N/A'),dateStr:c.data?String(c.data).split(' ')[0]:''};
+    }
+  });
+
+  // Totais por gerente a partir do CH local
+  const totalByGer = {};
+  (CH||[]).forEach(t=>{const g=String(t.gerente||'N/A');totalByGer[g]=(totalByGer[g]||0)+1;});
+  const gerentes = [...new Set((CH||[]).map(t=>String(t.gerente||'N/A')))].filter(g=>g&&g!=='N/A').sort();
+
+  // Popula dropdown de gerente
+  const gerEl = document.getElementById('ind-ger-filter');
+  if(gerEl){
+    gerEl.innerHTML = '<option value="">Todos os gerentes</option>'+gerentes.map(g=>`<option value="${g}"${g===_indGerFilter?' selected':''}>${g}</option>`).join('');
+  }
+
+  const gerF = _indGerFilter;
+  const feitosNoPeriodo = Object.values(contacted).filter(c=>(!gerF||c.gerente===gerF)&&inDateRange(c.dateStr)).length;
+  const totalItems = gerF?(totalByGer[gerF]||0):(CH||[]).length;
+  const feitosEver = Object.values(contacted).filter(c=>!gerF||c.gerente===gerF).length;
+  const pendentes = Math.max(0, totalItems - Math.min(feitosEver, totalItems));
+  const taxa = totalItems>0?Math.round(feitosEver/totalItems*100):0;
+  const hojeStr = new Date().toLocaleDateString('pt-BR');
+  const hojeCount = Object.values(contacted).filter(c=>(!gerF||c.gerente===gerF)&&c.dateStr===hojeStr).length;
+  const periodoLabel = (fromDate||toDate)?(fromDate?fromDate.toLocaleDateString('pt-BR'):'início')+' a '+(toDate?toDate.toLocaleDateString('pt-BR'):'hoje'):'todos os dias';
+
+  document.getElementById('ind-kpis').innerHTML=
+    `<div class="kc tl"><div class="kl">Contatos no Período</div><div class="kv">${feitosNoPeriodo}</div><div class="kf">${periodoLabel}</div></div>`+
+    `<div class="kc gn"><div class="kl">Taxa Geral</div><div class="kv">${taxa}%</div><div class="kf">de ${totalItems} chamados</div></div>`+
+    `<div class="kc rd"><div class="kl">Pendentes</div><div class="kv">${pendentes}</div><div class="kf">checklist desmarcado</div></div>`+
+    `<div class="kc am"><div class="kl">Hoje</div><div class="kv">${hojeCount}</div><div class="kf">contatos em ${hojeStr}</div></div>`;
+
+  // Gráfico por gerente (barras horizontais — feitos vs pendentes)
+  const gerentesChart = gerF?[gerF]:gerentes;
+  const gerFt = gerentesChart.map(g=>Object.values(contacted).filter(c=>c.gerente===g&&inDateRange(c.dateStr)).length);
+  const gerPd = gerentesChart.map(g=>{const tot=totalByGer[g]||0;const fe=Object.values(contacted).filter(c=>c.gerente===g).length;return Math.max(0,tot-Math.min(fe,tot));});
+  const ctx1=document.getElementById('ind-ger-chart');
+  if(_indChartGer){_indChartGer.destroy();_indChartGer=null;}
+  if(ctx1) _indChartGer=new Chart(ctx1,{type:'bar',data:{labels:gerentesChart,datasets:[
+    {label:'Contatados',data:gerFt,backgroundColor:'#10b981',borderRadius:4},
+    {label:'Pendentes',data:gerPd,backgroundColor:'rgba(239,68,68,.45)',borderRadius:4}
+  ]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{labels:{color:'#7c8fa8',font:{size:11},boxWidth:10}}},
+    scales:{x:{stacked:true,beginAtZero:true,grid:{color:'#252a3d'},ticks:{color:'#7c8fa8',font:{size:10}}},
+            y:{stacked:true,grid:{color:'#252a3d'},ticks:{color:'#7c8fa8',font:{size:10}}}}}});
+
+  // Gráfico evolução diária
+  const dayMap={};
+  Object.values(contacted).filter(c=>(!gerF||c.gerente===gerF)&&c.dateStr&&inDateRange(c.dateStr))
+    .forEach(c=>{dayMap[c.dateStr]=(dayMap[c.dateStr]||0)+1;});
+  const days=Object.keys(dayMap).sort((a,b)=>{const pa=a.split('/'),pb=b.split('/');return new Date(+pa[2],+pa[1]-1,+pa[0])-new Date(+pb[2],+pb[1]-1,+pb[0]);});
+  const ctx2=document.getElementById('ind-evo-chart');
+  if(_indChartEvo){_indChartEvo.destroy();_indChartEvo=null;}
+  if(ctx2) _indChartEvo=new Chart(ctx2,{type:'line',data:{labels:days,datasets:[{label:'Contatos',data:days.map(d=>dayMap[d]),borderColor:'#00e5c0',backgroundColor:'rgba(0,229,192,.1)',tension:0.3,fill:true,pointRadius:4,pointBackgroundColor:'#00e5c0'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#7c8fa8',font:{size:11},boxWidth:10}}},scales:{x:{grid:{color:'#252a3d'},ticks:{color:'#7c8fa8',font:{size:10}}},y:{beginAtZero:true,grid:{color:'#252a3d'},ticks:{color:'#7c8fa8',font:{size:10}}}}}});
+
+  // Tabela por gerente
+  const gerentesF = gerF?[gerF]:gerentes;
+  let tbl='<table style="width:100%;border-collapse:collapse;font-size:12px">';
+  tbl+='<thead><tr style="border-bottom:1px solid var(--border)">';
+  tbl+='<th style="text-align:left;padding:9px 12px;color:var(--text3);font-weight:600">Gerente</th>';
+  tbl+='<th style="text-align:center;padding:9px 12px;color:var(--text3);font-weight:600">Feitos / Total</th>';
+  tbl+='<th style="text-align:center;padding:9px 12px;color:var(--text3);font-weight:600">Pendentes</th>';
+  tbl+='<th style="text-align:center;padding:9px 12px;color:var(--text3);font-weight:600">Taxa</th></tr></thead><tbody>';
+  gerentesF.forEach(g=>{
+    const tot=totalByGer[g]||0;
+    const fPer=Object.values(contacted).filter(c=>c.gerente===g&&inDateRange(c.dateStr)).length;
+    const fEver=Object.values(contacted).filter(c=>c.gerente===g).length;
+    const pend=Math.max(0,tot-Math.min(fEver,tot));
+    const tx=tot>0?Math.round(fEver/tot*100):0;
+    const txColor=tx>=80?'var(--ok)':tx>=50?'var(--meta)':tx>0?'var(--crit)':'var(--text3)';
+    tbl+='<tr style="border-bottom:1px solid var(--border)">';
+    tbl+=`<td style="padding:9px 12px;color:var(--text);font-weight:500">${g}</td>`;
+    tbl+=`<td style="text-align:center;padding:9px 12px;color:var(--teal)">${fPer} / ${tot}</td>`;
+    tbl+=`<td style="text-align:center;padding:9px 12px;color:${pend>0?'var(--crit)':'var(--text3)'};font-weight:700">${pend}</td>`;
+    tbl+=`<td style="text-align:center;padding:9px 12px;font-weight:700;color:${txColor}">${tot>0?tx+'%':'—'}</td>`;
+    tbl+='</tr>';
+  });
+  if(gerentesF.length===0){tbl+=`<tr><td colspan="4" style="text-align:center;padding:40px;color:var(--text3)">Nenhum dado encontrado</td></tr>`;}
+  tbl+='</tbody></table>';
+  document.getElementById('ind-ger-tbl').innerHTML=tbl;
+}
+
+function _indSetGer(v) { _indGerFilter = v; _indBuild(); }
 function _indClearDates() {
   document.getElementById('ind-date-de').value = '';
   document.getElementById('ind-date-ate').value = '';
