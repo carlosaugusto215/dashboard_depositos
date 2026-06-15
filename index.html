@@ -1070,9 +1070,10 @@ function gDia(){
 function gDiaLabel(){
   const {from,to}=gDia();
   if(from===null&&to===null) return '';
-  if(from!==null&&to!==null&&from===to) return `Dia ${from<10?'0'+from:from}/06 selecionado`;
-  const de=from!==null?(from<10?'0'+from:from)+'/06':'01/06';
-  const ate=to!==null?(to<10?'0'+to:to)+'/06':'08/06';
+  if(from!==null&&to!==null&&from===to) return `Dia ${from<10?'0'+from:from}/${String(curMm).padStart(2,'0')} selecionado`;
+  const mo=String(curMm).padStart(2,'0');
+  const de=from!==null?(from<10?'0'+from:from)+'/'+mo:'01/'+mo;
+  const ate=to!==null?(to<10?'0'+to:to)+'/'+mo:(JD<10?'0'+JD:JD)+'/'+mo;
   return `${de} → ${ate}`;
 }
 function cliN(id){
@@ -1921,7 +1922,10 @@ function loadSnap(){
     if(s.SK_MENSAL)Object.assign(SK_MENSAL,s.SK_MENSAL);
     const selAn=document.getElementById('g-an');
     selAn.innerHTML='<option value="">Todos os Analistas</option>'+AL.map(a=>`<option>${a}</option>`).join('');
-    updateDaySelects(s.maxDay, s.mm);
+    // Usa o maior dia entre o snap e o CH mesclado (garante que dias hardcoded > snap aparecem)
+    const _chMax = CH.length > 0 ? Math.max(...CH.map(t => t.dia || 1)) : 1;
+    JD = Math.max(s.maxDay || 1, s.JD || 1, _chMax);
+    updateDaySelects(JD, s.mm);
     return true;
   }catch(e){return false;}
 }
