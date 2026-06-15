@@ -1274,9 +1274,12 @@ function renderDL(){
   }).join('');
 }
 
+function _isAdmin(){try{const s=JSON.parse(localStorage.getItem('dep_session')||'{}');return s.role==='admin';}catch(e){return false;}}
+
 function toggleDepContato(clientId){
   const cur=DEP_CONTACTS[String(clientId)]||{feito:false};
   if(cur.feito){
+    if(!_isAdmin()){alert('Apenas o administrador pode desmarcar um contato.');return;}
     DEP_CONTACTS[String(clientId)]={feito:false,data:'',obs:''};
     localStorage.setItem('dep_contacts',JSON.stringify(DEP_CONTACTS));
     renderDL();
@@ -1898,7 +1901,9 @@ function loadSnap(){
     const raw=localStorage.getItem('dep_snap');
     if(!raw)return false;
     const s=JSON.parse(raw);
-    CL=s.CL;YC=s.YC;CB=s.CB;CH=s.CH;TN=s.TN;
+    CL=s.CL;YC=s.YC;CB=s.CB;CH=s.CH||[];TN=s.TN;
+    // Mescla tickets do hardcoded (CH_INIT) que não estão no snap — garante que novos dias aparecem
+    if(CH_INIT&&CH_INIT.length>0){const snapTkts=new Set(CH.map(t=>t.ticket_id));const miss=CH_INIT.filter(t=>!snapTkts.has(t.ticket_id));if(miss.length)CH=[...CH,...miss];}
     AN_NET=s.AN_NET;
     AM=s.AM;MO=s.MO;TM=s.TM;AL=s.AL;JD=s.JD;DD=s.DD;
     // AN_DEP: SEMPRE do hardcoded — snap nunca sobrescreve totais diários
@@ -2367,7 +2372,7 @@ async function loadChContacts() {
 function toggleChContato(ticketId) {
   const cur = CH_CONTACTS[String(ticketId)] || {feito:false};
   if (cur.feito) {
-    // Desmarcando — limpa imediatamente sem popup
+    if(!_isAdmin()){alert('Apenas o administrador pode desmarcar um contato.');return;}
     CH_CONTACTS[String(ticketId)] = {feito:false, data:'', obs:''};
     localStorage.setItem('ch_contacts', JSON.stringify(CH_CONTACTS));
     renderChContatoKPI(); renderChTbl();
@@ -2437,6 +2442,7 @@ function _chkBtn(section, id){
 function toggleContact(section, id){
   const cur=_getContact(section,id);
   if(cur.feito){
+    if(!_isAdmin()){alert('Apenas o administrador pode desmarcar um contato.');return;}
     if(!CONTACTS[section])CONTACTS[section]={};
     CONTACTS[section][String(id)]={feito:false,data:'',obs:''};
     _saveContacts(); _contactRerender(section);
@@ -3963,167 +3969,146 @@ function _buildInd() {
     return true;
   };
 
-  // Parse all sheet rows
-  let allRows = [];
-  sheets.forEach(s => {
-    (_indRaw[s] || []).forEach(r => {
-      const feito = r.feito === true || r.feito === 'TRUE' || r.feito === 'true';
-      const analista = String(r.analista || r.gerente || '').trim() || 'N/A';
-      const dateStr = r.data_contato ? String(r.data_contato).split(' ')[0] : '';
-      allRows.push({ sheet: s, feito, analista, dateStr });
+  // Mapa de contatados por seção: { id → { analista, dateStr } }
+  // Mescla Sheets (prioritário) + localStorage (fallback para CORS falho ou não sincronizado)
+  const contacted = {};
+  sheets.forEach(s => { contacted[s] = {}; });
+
+  (_indRaw['Chamados']||[]).forEach(r => {
+    const feito = r.feito===true||r.feito==='TRUE'||r.feito==='true';
+    const id = String(r.ticket_id||''); if(!id) return;
+    const analista = String(r.gerente||'').trim()||'N/A';
+    const dateStr = r.data_contato?String(r.data_contato).split(' ')[0]:'';
+    if(feito) contacted.Chamados[id]={analista,dateStr};
+    else delete contacted.Chamados[id];
+  });
+  ['Depositos','Ativos','Saques','CashBack','Torneios','GrandesPerdas','Clientes'].forEach(s => {
+    (_indRaw[s]||[]).forEach(r => {
+      const feito = r.feito===true||r.feito==='TRUE'||r.feito==='true';
+      const id = String(r.client_id||''); if(!id) return;
+      const analista = String(r.analista||'').trim()||'N/A';
+      const dateStr = r.data_contato?String(r.data_contato).split(' ')[0]:'';
+      if(feito) contacted[s][id]={analista,dateStr};
+      else delete contacted[s][id];
+    });
+  });
+  // Complementa com localStorage (cobre CORS falho ou contatos ainda não sincronizados)
+  Object.entries(CH_CONTACTS||{}).forEach(([tid,c])=>{
+    if(c.feito&&!contacted.Chamados[tid]){
+      const t=(CH||[]).find(x=>String(x.ticket_id)===String(tid));
+      if(t) contacted.Chamados[tid]={analista:String(t.gerente||'N/A'),dateStr:c.data?String(c.data).split(' ')[0]:''};
+    }
+  });
+  Object.entries(DEP_CONTACTS||{}).forEach(([cid,c])=>{
+    if(c.feito&&!contacted.Depositos[cid]){
+      const cl=(CL||[]).find(x=>String(x.external_id)===String(cid));
+      if(cl) contacted.Depositos[cid]={analista:String(cl.analista||'N/A'),dateStr:c.data?String(c.data).split(' ')[0]:''};
+    }
+  });
+  const _secLsMap={ativos:'Ativos',saques:'Saques',cashback:'CashBack',torneios:'Torneios',grandesperdas:'GrandesPerdas',clientes:'Clientes'};
+  Object.entries(CONTACTS||{}).forEach(([sec,items])=>{
+    const sn=_secLsMap[sec];if(!sn)return;
+    Object.entries(items).forEach(([id,c])=>{
+      if(c.feito&&!contacted[sn][id]){
+        const cl=_contactClient(sec,id);
+        contacted[sn][id]={analista:cl?String(cl.analista||cl.responsavel||'N/A'):'N/A',dateStr:c.data?String(c.data).split(' ')[0]:''};
+      }
     });
   });
 
-  // Collect unique analistas from Sheets + local arrays
-  const anaFromSheets = allRows.map(r => r.analista).filter(a => a && a !== 'N/A');
-  const anaFromLocal = sheets.flatMap(s => Object.keys(localByAna[s]||{}));
-  const analistas = [...new Set([...anaFromSheets, ...anaFromLocal])].filter(a => a && a !== 'N/A').sort();
-
-  // Update analista filter dropdown
+  // Analistas vêm das arrays locais (fonte autoritativa de totais)
+  const analistas = [...new Set(sheets.flatMap(s=>Object.keys(localByAna[s]||{})))].filter(a=>a&&a!=='N/A').sort();
   const anaEl = document.getElementById('ind-ana-filter');
-  anaEl.innerHTML = '<option value="">Todos os analistas</option>' + analistas.map(a => `<option value="${a}"${a===_indAnaFilter?' selected':''}>${a}</option>`).join('');
+  anaEl.innerHTML = '<option value="">Todos os analistas</option>'+analistas.map(a=>`<option value="${a}"${a===_indAnaFilter?' selected':''}>${a}</option>`).join('');
 
-  // Section filter
   const colsToShow = _indSecFilter ? [_indSecFilter] : sheets;
+  const anaF = _indAnaFilter;
 
-  // Feitos within date range (for KPIs + evolution + section chart)
-  const feitosRows = allRows.filter(r =>
-    r.feito &&
-    (!_indSecFilter || r.sheet === _indSecFilter) &&
-    (!_indAnaFilter || r.analista === _indAnaFilter) &&
-    inDateRange(r.dateStr)
-  );
+  // Feitos no período (com filtro de data + seção + analista)
+  const feitosNoPeriodo = colsToShow.reduce((sum,s)=>sum+Object.values(contacted[s]).filter(c=>(!anaF||c.analista===anaF)&&inDateRange(c.dateStr)).length,0);
 
-  // All-time feitos per section/analista (for pendentes denominator)
-  const feitosEver = {};
-  sheets.forEach(s => { feitosEver[s] = {}; });
-  allRows.filter(r => r.feito).forEach(r => {
-    feitosEver[r.sheet][r.analista] = (feitosEver[r.sheet][r.analista]||0) + 1;
+  // KPIs: total do local, feitos ever para pendentes
+  let totalItems=0, totalEverFeitos=0;
+  colsToShow.forEach(s=>{
+    const lt=anaF?(localByAna[s][anaF]||0):(localTotals[s]||0);
+    const fe=anaF?Object.values(contacted[s]).filter(c=>c.analista===anaF).length:Object.keys(contacted[s]).length;
+    totalItems+=lt; totalEverFeitos+=Math.min(fe,lt);
   });
+  const pendentes=Math.max(0,totalItems-totalEverFeitos);
+  const taxa=totalItems>0?Math.round(totalEverFeitos/totalItems*100):0;
+  const hojeStr=new Date().toLocaleDateString('pt-BR');
+  const hojeCount=colsToShow.reduce((sum,s)=>sum+Object.values(contacted[s]).filter(c=>(!anaF||c.analista===anaF)&&c.dateStr===hojeStr).length,0);
+  const periodoLabel=(fromDate||toDate)?(fromDate?fromDate.toLocaleDateString('pt-BR'):'início')+' a '+(toDate?toDate.toLocaleDateString('pt-BR'):'hoje'):'todos os dias';
 
-  // KPIs — total comes from local arrays
-  let totalItems = 0, totalFeitos = 0;
-  colsToShow.forEach(s => {
-    const t = localTotals[s] || 0;
-    const f = _indAnaFilter
-      ? Object.entries(feitosEver[s]).filter(([a]) => a === _indAnaFilter).reduce((sum,[,v]) => sum+v, 0)
-      : Object.values(feitosEver[s]).reduce((sum,v) => sum+v, 0);
-    totalItems += t;
-    totalFeitos += Math.min(f, t);
-  });
-  const pendentes = Math.max(0, totalItems - totalFeitos);
-  const taxa = totalItems > 0 ? Math.round(totalFeitos / totalItems * 100) : 0;
-  const feitosNoPeriodo = feitosRows.length;
-  const hojeStr = new Date().toLocaleDateString('pt-BR');
-  const hojeCount = feitosRows.filter(r => r.dateStr === hojeStr).length;
-
-  const periodoLabel = (fromDate || toDate)
-    ? (fromDate ? fromDate.toLocaleDateString('pt-BR') : '—') + ' a ' + (toDate ? toDate.toLocaleDateString('pt-BR') : '—')
-    : 'todos os dias';
-
-  document.getElementById('ind-kpis').innerHTML =
+  document.getElementById('ind-kpis').innerHTML=
     `<div class="kc tl"><div class="kl">Contatos no Período</div><div class="kv">${feitosNoPeriodo}</div><div class="kf">${periodoLabel}</div></div>`+
     `<div class="kc gn"><div class="kl">Taxa Geral</div><div class="kv">${taxa}%</div><div class="kf">de ${totalItems} registros</div></div>`+
-    `<div class="kc rd"><div class="kl">Pendentes</div><div class="kv">${pendentes}</div><div class="kf">sem contato (total)</div></div>`+
+    `<div class="kc rd"><div class="kl">Pendentes</div><div class="kv">${pendentes}</div><div class="kf">checklist desmarcado</div></div>`+
     `<div class="kc am"><div class="kl">Hoje</div><div class="kv">${hojeCount}</div><div class="kf">contatos em ${hojeStr}</div></div>`;
 
-  // Section chart — feitos in period vs pendentes (local total - ever feitos)
-  const ctx1 = document.getElementById('ind-sec-chart');
-  if (_indChartSec) { _indChartSec.destroy(); _indChartSec = null; }
-  const anaF = _indAnaFilter;
-  const secFeitos = sheets.map(s => {
-    return allRows.filter(r => r.sheet===s && r.feito && (!anaF||r.analista===anaF) && inDateRange(r.dateStr)).length;
+  // Gráfico por seção (sempre mostra todas — sem filtro de seção no eixo)
+  const ctx1=document.getElementById('ind-sec-chart');
+  if(_indChartSec){_indChartSec.destroy();_indChartSec=null;}
+  const secFt=sheets.map(s=>Object.values(contacted[s]).filter(c=>(!anaF||c.analista===anaF)&&inDateRange(c.dateStr)).length);
+  const secPd=sheets.map(s=>{
+    const lt=anaF?(localByAna[s][anaF]||0):(localTotals[s]||0);
+    const fe=anaF?Object.values(contacted[s]).filter(c=>c.analista===anaF).length:Object.keys(contacted[s]).length;
+    return Math.max(0,lt-Math.min(fe,lt));
   });
-  const secPend = sheets.map(s => {
-    const lt = anaF ? (localByAna[s][anaF]||0) : (localTotals[s]||0);
-    const fe = anaF
-      ? (feitosEver[s][anaF]||0)
-      : Object.values(feitosEver[s]).reduce((sum,v)=>sum+v,0);
-    return Math.max(0, lt - Math.min(fe, lt));
-  });
-  _indChartSec = new Chart(ctx1, {
-    type: 'bar',
-    data: {
-      labels: sheets,
-      datasets: [
-        { label: 'Contatados', data: secFeitos, backgroundColor: '#10b981', borderRadius: 4 },
-        { label: 'Pendentes',  data: secPend,   backgroundColor: 'rgba(239,68,68,.45)', borderRadius: 4 }
-      ]
-    },
-    options: { responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{ labels:{ color:'#7c8fa8', font:{size:11}, boxWidth:10 } } },
-      scales:{
-        x:{ stacked:true, grid:{color:'#252a3d'}, ticks:{color:'#7c8fa8', font:{size:10}} },
-        y:{ stacked:true, beginAtZero:true, grid:{color:'#252a3d'}, ticks:{color:'#7c8fa8', font:{size:10}} }
-      }
-    }
-  });
+  _indChartSec=new Chart(ctx1,{type:'bar',data:{labels:sheets,datasets:[
+    {label:'Contatados',data:secFt,backgroundColor:'#10b981',borderRadius:4},
+    {label:'Pendentes',data:secPd,backgroundColor:'rgba(239,68,68,.45)',borderRadius:4}
+  ]},options:{responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{labels:{color:'#7c8fa8',font:{size:11},boxWidth:10}}},
+    scales:{x:{stacked:true,grid:{color:'#252a3d'},ticks:{color:'#7c8fa8',font:{size:10}}},
+            y:{stacked:true,beginAtZero:true,grid:{color:'#252a3d'},ticks:{color:'#7c8fa8',font:{size:10}}}}}});
 
-  // Evolution chart — feitos in period grouped by date
-  const dayMap = {};
-  feitosRows.filter(r => r.dateStr).forEach(r => { dayMap[r.dateStr] = (dayMap[r.dateStr]||0) + 1; });
-  const days = Object.keys(dayMap).sort((a, b) => {
-    const pa=a.split('/'), pb=b.split('/');
-    return new Date(+pa[2],+pa[1]-1,+pa[0]) - new Date(+pb[2],+pb[1]-1,+pb[0]);
-  });
-  const ctx2 = document.getElementById('ind-evo-chart');
-  if (_indChartEvo) { _indChartEvo.destroy(); _indChartEvo = null; }
-  _indChartEvo = new Chart(ctx2, {
-    type: 'line',
-    data: { labels: days, datasets: [{ label:'Contatos', data: days.map(d => dayMap[d]),
-      borderColor:'#00e5c0', backgroundColor:'rgba(0,229,192,.1)',
-      tension:0.3, fill:true, pointRadius:4, pointBackgroundColor:'#00e5c0' }] },
-    options: { responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{ labels:{ color:'#7c8fa8', font:{size:11}, boxWidth:10 } } },
-      scales:{
-        x:{ grid:{color:'#252a3d'}, ticks:{color:'#7c8fa8', font:{size:10}} },
-        y:{ beginAtZero:true, grid:{color:'#252a3d'}, ticks:{color:'#7c8fa8', font:{size:10}} }
-      }
-    }
-  });
+  // Gráfico evolução diária
+  const dayMap={};
+  colsToShow.forEach(s=>Object.values(contacted[s]).filter(c=>(!anaF||c.analista===anaF)&&c.dateStr&&inDateRange(c.dateStr)).forEach(c=>{dayMap[c.dateStr]=(dayMap[c.dateStr]||0)+1;}));
+  const days=Object.keys(dayMap).sort((a,b)=>{const pa=a.split('/'),pb=b.split('/');return new Date(+pa[2],+pa[1]-1,+pa[0])-new Date(+pb[2],+pb[1]-1,+pb[0]);});
+  const ctx2=document.getElementById('ind-evo-chart');
+  if(_indChartEvo){_indChartEvo.destroy();_indChartEvo=null;}
+  _indChartEvo=new Chart(ctx2,{type:'line',data:{labels:days,datasets:[{label:'Contatos',data:days.map(d=>dayMap[d]),borderColor:'#00e5c0',backgroundColor:'rgba(0,229,192,.1)',tension:0.3,fill:true,pointRadius:4,pointBackgroundColor:'#00e5c0'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#7c8fa8',font:{size:11},boxWidth:10}}},scales:{x:{grid:{color:'#252a3d'},ticks:{color:'#7c8fa8',font:{size:10}}},y:{beginAtZero:true,grid:{color:'#252a3d'},ticks:{color:'#7c8fa8',font:{size:10}}}}}});
 
-  // Analista table
-  const analistasF = analistas.filter(a => !_indAnaFilter || a === _indAnaFilter);
-  let tbl = '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px;min-width:600px">';
-  tbl += '<thead><tr style="border-bottom:1px solid var(--border)">';
-  tbl += '<th style="text-align:left;padding:9px 12px;color:var(--text3);font-weight:600;white-space:nowrap">Analista</th>';
-  colsToShow.forEach(s => { tbl += `<th style="text-align:center;padding:9px 8px;color:var(--text3);font-weight:600;white-space:nowrap;font-size:11px">${s}</th>`; });
-  tbl += '<th style="text-align:center;padding:9px 12px;color:var(--text3);font-weight:600">Feitos</th>';
-  tbl += '<th style="text-align:center;padding:9px 12px;color:var(--text3);font-weight:600">Pendentes</th>';
-  tbl += '<th style="text-align:center;padding:9px 12px;color:var(--text3);font-weight:600">Taxa</th></tr></thead><tbody>';
+  // Tabela por analista
+  const analistasF=analistas.filter(a=>!anaF||a===anaF);
+  let tbl='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px;min-width:600px">';
+  tbl+='<thead><tr style="border-bottom:1px solid var(--border)">';
+  tbl+='<th style="text-align:left;padding:9px 12px;color:var(--text3);font-weight:600;white-space:nowrap">Analista</th>';
+  colsToShow.forEach(s=>{tbl+=`<th style="text-align:center;padding:9px 8px;color:var(--text3);font-weight:600;white-space:nowrap;font-size:11px">${s}</th>`;});
+  tbl+='<th style="text-align:center;padding:9px 12px;color:var(--text3);font-weight:600">Feitos</th>';
+  tbl+='<th style="text-align:center;padding:9px 12px;color:var(--text3);font-weight:600">Pendentes</th>';
+  tbl+='<th style="text-align:center;padding:9px 12px;color:var(--text3);font-weight:600">Taxa</th></tr></thead><tbody>';
 
-  analistasF.forEach(ana => {
-    let totF = 0, totT = 0, totPend = 0;
-    const cells = {};
-    colsToShow.forEach(s => {
-      const lt = localByAna[s][ana] || 0;
-      const fEver = feitosEver[s][ana] || 0;
-      const fPer = allRows.filter(r => r.sheet===s && r.analista===ana && r.feito && inDateRange(r.dateStr)).length;
-      const pend = Math.max(0, lt - Math.min(fEver, lt));
-      cells[s] = { f: fPer, t: lt, pend };
-      totF += fPer; totT += lt; totPend += pend;
+  analistasF.forEach(ana=>{
+    let totF=0,totT=0,totPend=0;
+    const cells={};
+    colsToShow.forEach(s=>{
+      const lt=localByAna[s][ana]||0;
+      const fPer=Object.values(contacted[s]).filter(c=>c.analista===ana&&inDateRange(c.dateStr)).length;
+      const fEver=Object.values(contacted[s]).filter(c=>c.analista===ana).length;
+      const pend=Math.max(0,lt-Math.min(fEver,lt));
+      cells[s]={f:fPer,t:lt,pend};
+      totF+=fPer;totT+=lt;totPend+=pend;
     });
-    const taxa2 = totT > 0 ? Math.round((totT - totPend) / totT * 100) : 0;
-    const txColor = taxa2 >= 80 ? 'var(--ok)' : taxa2 >= 50 ? 'var(--meta)' : taxa2 > 0 ? 'var(--crit)' : 'var(--text3)';
-    tbl += '<tr style="border-bottom:1px solid var(--border)">';
-    tbl += `<td style="padding:9px 12px;color:var(--text);font-weight:500;white-space:nowrap">${ana}</td>`;
-    colsToShow.forEach(s => {
-      const c = cells[s];
-      const label = c.t > 0 ? `${c.f}/${c.t}` : '—';
-      const col = c.f > 0 ? 'var(--teal)' : c.pend > 0 ? 'var(--crit)' : 'var(--text3)';
-      tbl += `<td style="text-align:center;padding:9px 8px;color:${col}">${label}</td>`;
+    const taxa2=totT>0?Math.round((totT-totPend)/totT*100):0;
+    const txColor=taxa2>=80?'var(--ok)':taxa2>=50?'var(--meta)':taxa2>0?'var(--crit)':'var(--text3)';
+    tbl+='<tr style="border-bottom:1px solid var(--border)">';
+    tbl+=`<td style="padding:9px 12px;color:var(--text);font-weight:500;white-space:nowrap">${ana}</td>`;
+    colsToShow.forEach(s=>{
+      const c=cells[s];
+      const col=c.f>0?'var(--teal)':c.pend>0?'var(--crit)':'var(--text3)';
+      tbl+=`<td style="text-align:center;padding:9px 8px;color:${col}">${c.t>0?c.f+'/'+c.t:'—'}</td>`;
     });
-    tbl += `<td style="text-align:center;padding:9px 12px;color:var(--teal);font-weight:700">${totF}</td>`;
-    tbl += `<td style="text-align:center;padding:9px 12px;color:${totPend>0?'var(--crit)':'var(--text3)'};font-weight:700">${totPend}</td>`;
-    tbl += `<td style="text-align:center;padding:9px 12px;font-weight:700;color:${txColor}">${totT>0?taxa2+'%':'—'}</td>`;
-    tbl += '</tr>';
+    tbl+=`<td style="text-align:center;padding:9px 12px;color:var(--teal);font-weight:700">${totF}</td>`;
+    tbl+=`<td style="text-align:center;padding:9px 12px;color:${totPend>0?'var(--crit)':'var(--text3)'};font-weight:700">${totPend}</td>`;
+    tbl+=`<td style="text-align:center;padding:9px 12px;font-weight:700;color:${txColor}">${totT>0?taxa2+'%':'—'}</td>`;
+    tbl+='</tr>';
   });
-
-  if (analistasF.length === 0) {
-    tbl += `<tr><td colspan="${colsToShow.length+4}" style="text-align:center;padding:40px;color:var(--text3)">Nenhum dado encontrado</td></tr>`;
-  }
-  tbl += '</tbody></table></div>';
-  document.getElementById('ind-ana-tbl').innerHTML = tbl;
+  if(analistasF.length===0){tbl+=`<tr><td colspan="${colsToShow.length+4}" style="text-align:center;padding:40px;color:var(--text3)">Nenhum dado encontrado</td></tr>`;}
+  tbl+='</tbody></table></div>';
+  document.getElementById('ind-ana-tbl').innerHTML=tbl;
 }
 
 function _indSetSec(v) { _indSecFilter = v; _indBuild(); }
