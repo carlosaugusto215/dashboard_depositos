@@ -4122,19 +4122,25 @@ function _buildInd() {
   const ateVal = (document.getElementById('ind-date-ate')||{}).value || '';
   const fromDate = deVal ? new Date(deVal + 'T00:00:00') : null;
   const toDate = ateVal ? new Date(ateVal + 'T23:59:59') : null;
-  const inDateRange = (ddmm) => {
-    if (!fromDate && !toDate) return true;
-    const d = _indParseDDMM(ddmm);
-    if (!d) return false;
-    if (fromDate && d < fromDate) return false;
-    if (toDate && d > toDate) return false;
+
+  // Filtra pelo dia do chamado (ticket.dia), não pela data de contato
+  const fromDay = fromDate ? fromDate.getDate() : null;
+  const toDay   = toDate   ? toDate.getDate()   : null;
+  const fromMo  = fromDate ? fromDate.getMonth()+1 : null;
+  const toMo    = toDate   ? toDate.getMonth()+1   : null;
+  const diaOk = (dia) => {
+    if (fromDay === null && toDay === null) return true;
+    if (fromMo !== null && fromMo !== curMm) return false;
+    if (toMo   !== null && toMo   !== curMm) return false;
+    if (fromDay !== null && dia < fromDay) return false;
+    if (toDay   !== null && dia > toDay)   return false;
     return true;
   };
 
   // Normaliza qualquer formato de data para dd/mm/yyyy (pt-BR)
   const _normDate = raw => { const d=_indParseDDMM(raw); return d?d.toLocaleDateString('pt-BR'):''; };
 
-  // Mapa de contatados: { ticket_id → { gerente, dateStr } }
+  // Mapa de contatados: { ticket_id → { gerente, dateStr } } — todos os feitos, sem filtro de data
   const contacted = {};
   (_indRaw.Chamados||[]).forEach(r => {
     const feito = r.feito===true||r.feito==='TRUE'||r.feito==='true';
@@ -4151,37 +4157,43 @@ function _buildInd() {
     }
   });
 
-  // Totais por gerente a partir do CH local
-  const totalByGer = {};
-  (CH||[]).forEach(t=>{const g=String(t.gerente||'N/A');totalByGer[g]=(totalByGer[g]||0)+1;});
-  const gerentes = [...new Set((CH||[]).map(t=>String(t.gerente||'N/A')))].filter(g=>g&&g!=='N/A').sort();
+  // CH filtrado pelo dia do ticket
+  const chFilt = (CH||[]).filter(t => diaOk(t.dia));
+  const chFiltIds = new Set(chFilt.map(t => String(t.ticket_id)));
 
-  // Popula dropdown de gerente
+  // contacted restrito apenas aos tickets do período
+  const contactedFilt = Object.fromEntries(
+    Object.entries(contacted).filter(([tid]) => chFiltIds.has(tid))
+  );
+
+  // Totais por gerente no período
+  const totalByGer = {};
+  chFilt.forEach(t => { const g=String(t.gerente||'N/A'); totalByGer[g]=(totalByGer[g]||0)+1; });
+
+  // Dropdown: mostra todos os gerentes do CH (sem filtro de data)
+  const gerentes = [...new Set((CH||[]).map(t=>String(t.gerente||'N/A')))].filter(g=>g&&g!=='N/A').sort();
   const gerEl = document.getElementById('ind-ger-filter');
-  if(gerEl){
-    gerEl.innerHTML = '<option value="">Todos os gerentes</option>'+gerentes.map(g=>`<option value="${g}"${g===_indGerFilter?' selected':''}>${g}</option>`).join('');
-  }
+  if(gerEl) gerEl.innerHTML = '<option value="">Todos os gerentes</option>'+gerentes.map(g=>`<option value="${g}"${g===_indGerFilter?' selected':''}>${g}</option>`).join('');
 
   const gerF = _indGerFilter;
-  const feitosNoPeriodo = Object.values(contacted).filter(c=>(!gerF||c.gerente===gerF)&&inDateRange(c.dateStr)).length;
-  const totalItems = gerF?(totalByGer[gerF]||0):(CH||[]).length;
-  const feitosEver = Object.values(contacted).filter(c=>!gerF||c.gerente===gerF).length;
-  const pendentes = Math.max(0, totalItems - Math.min(feitosEver, totalItems));
-  const taxa = totalItems>0?Math.round(feitosEver/totalItems*100):0;
+  const feitosNoPeriodo = Object.values(contactedFilt).filter(c=>!gerF||c.gerente===gerF).length;
+  const totalItems = gerF?(totalByGer[gerF]||0):chFilt.length;
+  const pendentes = Math.max(0, totalItems - Math.min(feitosNoPeriodo, totalItems));
+  const taxa = totalItems>0?Math.round(feitosNoPeriodo/totalItems*100):0;
   const hojeStr = new Date().toLocaleDateString('pt-BR');
-  const hojeCount = Object.values(contacted).filter(c=>(!gerF||c.gerente===gerF)&&c.dateStr===hojeStr).length;
+  const hojeCount = Object.values(contactedFilt).filter(c=>(!gerF||c.gerente===gerF)&&c.dateStr===hojeStr).length;
   const periodoLabel = (fromDate||toDate)?(fromDate?fromDate.toLocaleDateString('pt-BR'):'início')+' a '+(toDate?toDate.toLocaleDateString('pt-BR'):'hoje'):'todos os dias';
 
   document.getElementById('ind-kpis').innerHTML=
-    `<div class="kc tl"><div class="kl">Contatos no Período</div><div class="kv">${feitosNoPeriodo}</div><div class="kf">${periodoLabel}</div></div>`+
-    `<div class="kc gn"><div class="kl">Taxa Geral</div><div class="kv">${taxa}%</div><div class="kf">de ${totalItems} chamados</div></div>`+
+    `<div class="kc tl"><div class="kl">Chamados no Período</div><div class="kv">${totalItems}</div><div class="kf">${feitosNoPeriodo} contatados · ${periodoLabel}</div></div>`+
+    `<div class="kc gn"><div class="kl">Taxa de Contato</div><div class="kv">${taxa}%</div><div class="kf">de ${totalItems} chamados</div></div>`+
     `<div class="kc rd"><div class="kl">Pendentes</div><div class="kv">${pendentes}</div><div class="kf">checklist desmarcado</div></div>`+
-    `<div class="kc am"><div class="kl">Hoje</div><div class="kv">${hojeCount}</div><div class="kf">contatos em ${hojeStr}</div></div>`;
+    `<div class="kc am"><div class="kl">Contatados Hoje</div><div class="kv">${hojeCount}</div><div class="kf">em ${hojeStr}</div></div>`;
 
-  // Gráfico por gerente (barras horizontais — feitos vs pendentes)
-  const gerentesChart = gerF?[gerF]:gerentes;
-  const gerFt = gerentesChart.map(g=>Object.values(contacted).filter(c=>c.gerente===g&&inDateRange(c.dateStr)).length);
-  const gerPd = gerentesChart.map(g=>{const tot=totalByGer[g]||0;const fe=Object.values(contacted).filter(c=>c.gerente===g).length;return Math.max(0,tot-Math.min(fe,tot));});
+  // Gráfico por gerente — apenas gerentes com tickets no período
+  const gerentesChart = gerF?[gerF]:gerentes.filter(g=>(totalByGer[g]||0)>0);
+  const gerFt = gerentesChart.map(g=>Object.values(contactedFilt).filter(c=>c.gerente===g).length);
+  const gerPd = gerentesChart.map(g=>{const tot=totalByGer[g]||0;const fe=Object.values(contactedFilt).filter(c=>c.gerente===g).length;return Math.max(0,tot-Math.min(fe,tot));});
   const ctx1=document.getElementById('ind-ger-chart');
   if(_indChartGer){_indChartGer.destroy();_indChartGer=null;}
   if(ctx1) _indChartGer=new Chart(ctx1,{type:'bar',data:{labels:gerentesChart,datasets:[
@@ -4192,17 +4204,17 @@ function _buildInd() {
     scales:{x:{stacked:true,beginAtZero:true,grid:{color:'#252a3d'},ticks:{color:'#7c8fa8',font:{size:10}}},
             y:{stacked:true,grid:{color:'#252a3d'},ticks:{color:'#7c8fa8',font:{size:10}}}}}});
 
-  // Gráfico evolução diária
+  // Gráfico evolução — quando foram contatados os tickets do período selecionado
   const dayMap={};
-  Object.values(contacted).filter(c=>(!gerF||c.gerente===gerF)&&c.dateStr&&inDateRange(c.dateStr))
+  Object.values(contactedFilt).filter(c=>(!gerF||c.gerente===gerF)&&c.dateStr)
     .forEach(c=>{dayMap[c.dateStr]=(dayMap[c.dateStr]||0)+1;});
   const days=Object.keys(dayMap).sort((a,b)=>{const pa=a.split('/'),pb=b.split('/');return new Date(+pa[2],+pa[1]-1,+pa[0])-new Date(+pb[2],+pb[1]-1,+pb[0]);});
   const ctx2=document.getElementById('ind-evo-chart');
   if(_indChartEvo){_indChartEvo.destroy();_indChartEvo=null;}
-  if(ctx2) _indChartEvo=new Chart(ctx2,{type:'line',data:{labels:days,datasets:[{label:'Contatos',data:days.map(d=>dayMap[d]),borderColor:'#00e5c0',backgroundColor:'rgba(0,229,192,.1)',tension:0.3,fill:true,pointRadius:4,pointBackgroundColor:'#00e5c0'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#7c8fa8',font:{size:11},boxWidth:10}}},scales:{x:{grid:{color:'#252a3d'},ticks:{color:'#7c8fa8',font:{size:10}}},y:{beginAtZero:true,grid:{color:'#252a3d'},ticks:{color:'#7c8fa8',font:{size:10}}}}}});
+  if(ctx2) _indChartEvo=new Chart(ctx2,{type:'line',data:{labels:days,datasets:[{label:'Contatados',data:days.map(d=>dayMap[d]),borderColor:'#00e5c0',backgroundColor:'rgba(0,229,192,.1)',tension:0.3,fill:true,pointRadius:4,pointBackgroundColor:'#00e5c0'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#7c8fa8',font:{size:11},boxWidth:10}}},scales:{x:{grid:{color:'#252a3d'},ticks:{color:'#7c8fa8',font:{size:10}}},y:{beginAtZero:true,grid:{color:'#252a3d'},ticks:{color:'#7c8fa8',font:{size:10}}}}}});
 
   // Tabela por gerente
-  const gerentesF = gerF?[gerF]:gerentes;
+  const gerentesF = gerF?[gerF]:gerentes.filter(g=>(totalByGer[g]||0)>0);
   let tbl='<table style="width:100%;border-collapse:collapse;font-size:12px">';
   tbl+='<thead><tr style="border-bottom:1px solid var(--border)">';
   tbl+='<th style="text-align:left;padding:9px 12px;color:var(--text3);font-weight:600">Gerente</th>';
@@ -4211,14 +4223,13 @@ function _buildInd() {
   tbl+='<th style="text-align:center;padding:9px 12px;color:var(--text3);font-weight:600">Taxa</th></tr></thead><tbody>';
   gerentesF.forEach(g=>{
     const tot=totalByGer[g]||0;
-    const fPer=Object.values(contacted).filter(c=>c.gerente===g&&inDateRange(c.dateStr)).length;
-    const fEver=Object.values(contacted).filter(c=>c.gerente===g).length;
-    const pend=Math.max(0,tot-Math.min(fEver,tot));
-    const tx=tot>0?Math.round(fEver/tot*100):0;
+    const fe=Object.values(contactedFilt).filter(c=>c.gerente===g).length;
+    const pend=Math.max(0,tot-Math.min(fe,tot));
+    const tx=tot>0?Math.round(fe/tot*100):0;
     const txColor=tx>=80?'var(--ok)':tx>=50?'var(--meta)':tx>0?'var(--crit)':'var(--text3)';
     tbl+='<tr style="border-bottom:1px solid var(--border)">';
     tbl+=`<td style="padding:9px 12px;color:var(--text);font-weight:500">${g}</td>`;
-    tbl+=`<td style="text-align:center;padding:9px 12px;color:var(--teal)">${fPer} / ${tot}</td>`;
+    tbl+=`<td style="text-align:center;padding:9px 12px;color:var(--teal)">${fe} / ${tot}</td>`;
     tbl+=`<td style="text-align:center;padding:9px 12px;color:${pend>0?'var(--crit)':'var(--text3)'};font-weight:700">${pend}</td>`;
     tbl+=`<td style="text-align:center;padding:9px 12px;font-weight:700;color:${txColor}">${tot>0?tx+'%':'—'}</td>`;
     tbl+='</tr>';
