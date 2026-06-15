@@ -928,6 +928,11 @@ tr:last-child td{border-bottom:none}
       <select class="sel" id="ind-ana-filter" onchange="_indSetAna(this.value)">
         <option value="">Todos os analistas</option>
       </select>
+      <span style="font-size:11px;color:var(--text3)">Período:</span>
+      <input type="date" id="ind-date-de" onchange="_indBuild()" style="background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:5px 10px;border-radius:var(--r);font-size:12px;cursor:pointer;outline:none;color-scheme:dark">
+      <span style="font-size:11px;color:var(--text3)">até</span>
+      <input type="date" id="ind-date-ate" onchange="_indBuild()" style="background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:5px 10px;border-radius:var(--r);font-size:12px;cursor:pointer;outline:none;color-scheme:dark">
+      <button onclick="_indClearDates()" style="padding:5px 10px;border-radius:var(--r);border:1px solid var(--border);background:var(--bg3);color:var(--text3);cursor:pointer;font-size:11px">Limpar</button>
     </div>
   </div>
   <div id="ind-loading" style="text-align:center;padding:70px 0">
@@ -3918,8 +3923,47 @@ async function renderIndicadores() {
   _buildInd();
 }
 
+function _indLocalTotals() {
+  const add = (map, key, n) => { map[key] = (map[key]||0) + n; };
+  const byAna = { Chamados:{}, Depositos:{}, Ativos:{}, Saques:{}, CashBack:{}, Torneios:{}, GrandesPerdas:{}, Clientes:{} };
+  const totals = { Chamados:0, Depositos:0, Ativos:0, Saques:0, CashBack:0, Torneios:0, GrandesPerdas:0, Clientes:0 };
+  (CH||[]).forEach(t => { const a=String(t.gerente||'N/A'); add(byAna.Chamados,a,1); totals.Chamados++; });
+  (CL||[]).forEach(c => { const a=String(c.analista||'N/A'); add(byAna.Depositos,a,1); totals.Depositos++; add(byAna.Clientes,a,1); totals.Clientes++; });
+  (YC||[]).forEach(c => { const a=String(c.analista||'N/A'); add(byAna.Ativos,a,1); totals.Ativos++; });
+  (SK||[]).forEach(c => { const a=String(c.analista||'N/A'); add(byAna.Saques,a,1); totals.Saques++; });
+  (CB||[]).forEach(c => { const a=String(c.analista||'N/A'); add(byAna.CashBack,a,1); totals.CashBack++; });
+  (TN||[]).forEach(c => { const a=String(c.analista||'N/A'); add(byAna.Torneios,a,1); totals.Torneios++; });
+  (GP||[]).forEach(c => { const a=String(c.analista||'N/A'); add(byAna.GrandesPerdas,a,1); totals.GrandesPerdas++; });
+  return { totals, byAna };
+}
+
+function _indParseDDMM(ddmmyyyy) {
+  if (!ddmmyyyy) return null;
+  const p = ddmmyyyy.split('/');
+  return p.length === 3 ? new Date(+p[2], +p[1]-1, +p[0]) : null;
+}
+
+function _indBuild() { if (Object.keys(_indRaw).length > 0) _buildInd(); }
+
 function _buildInd() {
   const sheets = ['Chamados','Depositos','Ativos','Saques','CashBack','Torneios','GrandesPerdas','Clientes'];
+  const { totals: localTotals, byAna: localByAna } = _indLocalTotals();
+
+  // Parse date filter
+  const deVal = (document.getElementById('ind-date-de')||{}).value || '';
+  const ateVal = (document.getElementById('ind-date-ate')||{}).value || '';
+  const fromDate = deVal ? new Date(deVal) : null;
+  const toDate = ateVal ? new Date(ateVal + 'T23:59:59') : null;
+  const inDateRange = (ddmm) => {
+    if (!fromDate && !toDate) return true;
+    const d = _indParseDDMM(ddmm);
+    if (!d) return false;
+    if (fromDate && d < fromDate) return false;
+    if (toDate && d > toDate) return false;
+    return true;
+  };
+
+  // Parse all sheet rows
   let allRows = [];
   sheets.forEach(s => {
     (_indRaw[s] || []).forEach(r => {
@@ -3929,39 +3973,81 @@ function _buildInd() {
       allRows.push({ sheet: s, feito, analista, dateStr });
     });
   });
-  const filtered = allRows.filter(r => {
-    if (_indSecFilter && r.sheet !== _indSecFilter) return false;
-    if (_indAnaFilter && r.analista !== _indAnaFilter) return false;
-    return true;
-  });
-  const feitos = filtered.filter(r => r.feito).length;
-  const total = filtered.length;
-  const pendentes = total - feitos;
-  const taxa = total > 0 ? Math.round(feitos / total * 100) : 0;
-  const hojeStr = new Date().toLocaleDateString('pt-BR');
-  const hojeCount = filtered.filter(r => r.feito && r.dateStr === hojeStr).length;
-  document.getElementById('ind-kpis').innerHTML =
-    `<div class="kc tl"><div class="kl">Total Contatos</div><div class="kv">${feitos}</div><div class="kf">registros com contato</div></div>`+
-    `<div class="kc gn"><div class="kl">Taxa de Contato</div><div class="kv">${taxa}%</div><div class="kf">de ${total} registros</div></div>`+
-    `<div class="kc rd"><div class="kl">Pendentes</div><div class="kv">${pendentes}</div><div class="kf">sem contato</div></div>`+
-    `<div class="kc am"><div class="kl">Hoje</div><div class="kv">${hojeCount}</div><div class="kf">contatos em ${hojeStr}</div></div>`;
-  const analistas = [...new Set(allRows.map(r => r.analista).filter(a => a && a !== 'N/A'))].sort();
+
+  // Collect unique analistas from Sheets + local arrays
+  const anaFromSheets = allRows.map(r => r.analista).filter(a => a && a !== 'N/A');
+  const anaFromLocal = sheets.flatMap(s => Object.keys(localByAna[s]||{}));
+  const analistas = [...new Set([...anaFromSheets, ...anaFromLocal])].filter(a => a && a !== 'N/A').sort();
+
+  // Update analista filter dropdown
   const anaEl = document.getElementById('ind-ana-filter');
   anaEl.innerHTML = '<option value="">Todos os analistas</option>' + analistas.map(a => `<option value="${a}"${a===_indAnaFilter?' selected':''}>${a}</option>`).join('');
-  const secStats = {};
-  sheets.forEach(s => {
-    const rows = allRows.filter(r => r.sheet === s && (!_indAnaFilter || r.analista === _indAnaFilter));
-    secStats[s] = { feitos: rows.filter(r => r.feito).length, total: rows.length };
+
+  // Section filter
+  const colsToShow = _indSecFilter ? [_indSecFilter] : sheets;
+
+  // Feitos within date range (for KPIs + evolution + section chart)
+  const feitosRows = allRows.filter(r =>
+    r.feito &&
+    (!_indSecFilter || r.sheet === _indSecFilter) &&
+    (!_indAnaFilter || r.analista === _indAnaFilter) &&
+    inDateRange(r.dateStr)
+  );
+
+  // All-time feitos per section/analista (for pendentes denominator)
+  const feitosEver = {};
+  sheets.forEach(s => { feitosEver[s] = {}; });
+  allRows.filter(r => r.feito).forEach(r => {
+    feitosEver[r.sheet][r.analista] = (feitosEver[r.sheet][r.analista]||0) + 1;
   });
+
+  // KPIs — total comes from local arrays
+  let totalItems = 0, totalFeitos = 0;
+  colsToShow.forEach(s => {
+    const t = localTotals[s] || 0;
+    const f = _indAnaFilter
+      ? Object.entries(feitosEver[s]).filter(([a]) => a === _indAnaFilter).reduce((sum,[,v]) => sum+v, 0)
+      : Object.values(feitosEver[s]).reduce((sum,v) => sum+v, 0);
+    totalItems += t;
+    totalFeitos += Math.min(f, t);
+  });
+  const pendentes = Math.max(0, totalItems - totalFeitos);
+  const taxa = totalItems > 0 ? Math.round(totalFeitos / totalItems * 100) : 0;
+  const feitosNoPeriodo = feitosRows.length;
+  const hojeStr = new Date().toLocaleDateString('pt-BR');
+  const hojeCount = feitosRows.filter(r => r.dateStr === hojeStr).length;
+
+  const periodoLabel = (fromDate || toDate)
+    ? (fromDate ? fromDate.toLocaleDateString('pt-BR') : '—') + ' a ' + (toDate ? toDate.toLocaleDateString('pt-BR') : '—')
+    : 'todos os dias';
+
+  document.getElementById('ind-kpis').innerHTML =
+    `<div class="kc tl"><div class="kl">Contatos no Período</div><div class="kv">${feitosNoPeriodo}</div><div class="kf">${periodoLabel}</div></div>`+
+    `<div class="kc gn"><div class="kl">Taxa Geral</div><div class="kv">${taxa}%</div><div class="kf">de ${totalItems} registros</div></div>`+
+    `<div class="kc rd"><div class="kl">Pendentes</div><div class="kv">${pendentes}</div><div class="kf">sem contato (total)</div></div>`+
+    `<div class="kc am"><div class="kl">Hoje</div><div class="kv">${hojeCount}</div><div class="kf">contatos em ${hojeStr}</div></div>`;
+
+  // Section chart — feitos in period vs pendentes (local total - ever feitos)
   const ctx1 = document.getElementById('ind-sec-chart');
   if (_indChartSec) { _indChartSec.destroy(); _indChartSec = null; }
+  const anaF = _indAnaFilter;
+  const secFeitos = sheets.map(s => {
+    return allRows.filter(r => r.sheet===s && r.feito && (!anaF||r.analista===anaF) && inDateRange(r.dateStr)).length;
+  });
+  const secPend = sheets.map(s => {
+    const lt = anaF ? (localByAna[s][anaF]||0) : (localTotals[s]||0);
+    const fe = anaF
+      ? (feitosEver[s][anaF]||0)
+      : Object.values(feitosEver[s]).reduce((sum,v)=>sum+v,0);
+    return Math.max(0, lt - Math.min(fe, lt));
+  });
   _indChartSec = new Chart(ctx1, {
     type: 'bar',
     data: {
       labels: sheets,
       datasets: [
-        { label: 'Contatados', data: sheets.map(s => secStats[s].feitos), backgroundColor: '#10b981', borderRadius: 4 },
-        { label: 'Pendentes',  data: sheets.map(s => secStats[s].total - secStats[s].feitos), backgroundColor: 'rgba(239,68,68,.45)', borderRadius: 4 }
+        { label: 'Contatados', data: secFeitos, backgroundColor: '#10b981', borderRadius: 4 },
+        { label: 'Pendentes',  data: secPend,   backgroundColor: 'rgba(239,68,68,.45)', borderRadius: 4 }
       ]
     },
     options: { responsive:true, maintainAspectRatio:false,
@@ -3972,10 +4058,12 @@ function _buildInd() {
       }
     }
   });
+
+  // Evolution chart — feitos in period grouped by date
   const dayMap = {};
-  filtered.filter(r => r.feito && r.dateStr).forEach(r => { dayMap[r.dateStr] = (dayMap[r.dateStr]||0) + 1; });
+  feitosRows.filter(r => r.dateStr).forEach(r => { dayMap[r.dateStr] = (dayMap[r.dateStr]||0) + 1; });
   const days = Object.keys(dayMap).sort((a, b) => {
-    const pa = a.split('/'), pb = b.split('/');
+    const pa=a.split('/'), pb=b.split('/');
     return new Date(+pa[2],+pa[1]-1,+pa[0]) - new Date(+pb[2],+pb[1]-1,+pb[0]);
   });
   const ctx2 = document.getElementById('ind-evo-chart');
@@ -3993,44 +4081,58 @@ function _buildInd() {
       }
     }
   });
-  const colsToShow = _indSecFilter ? [_indSecFilter] : sheets;
+
+  // Analista table
   const analistasF = analistas.filter(a => !_indAnaFilter || a === _indAnaFilter);
   let tbl = '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px;min-width:600px">';
   tbl += '<thead><tr style="border-bottom:1px solid var(--border)">';
   tbl += '<th style="text-align:left;padding:9px 12px;color:var(--text3);font-weight:600;white-space:nowrap">Analista</th>';
   colsToShow.forEach(s => { tbl += `<th style="text-align:center;padding:9px 8px;color:var(--text3);font-weight:600;white-space:nowrap;font-size:11px">${s}</th>`; });
-  tbl += '<th style="text-align:center;padding:9px 12px;color:var(--text3);font-weight:600">Total</th>';
+  tbl += '<th style="text-align:center;padding:9px 12px;color:var(--text3);font-weight:600">Feitos</th>';
+  tbl += '<th style="text-align:center;padding:9px 12px;color:var(--text3);font-weight:600">Pendentes</th>';
   tbl += '<th style="text-align:center;padding:9px 12px;color:var(--text3);font-weight:600">Taxa</th></tr></thead><tbody>';
+
   analistasF.forEach(ana => {
-    let totF = 0, totT = 0;
+    let totF = 0, totT = 0, totPend = 0;
     const cells = {};
     colsToShow.forEach(s => {
-      const rows = allRows.filter(r => r.sheet === s && r.analista === ana);
-      const f = rows.filter(r => r.feito).length;
-      const t = rows.length;
-      cells[s] = {f, t}; totF += f; totT += t;
+      const lt = localByAna[s][ana] || 0;
+      const fEver = feitosEver[s][ana] || 0;
+      const fPer = allRows.filter(r => r.sheet===s && r.analista===ana && r.feito && inDateRange(r.dateStr)).length;
+      const pend = Math.max(0, lt - Math.min(fEver, lt));
+      cells[s] = { f: fPer, t: lt, pend };
+      totF += fPer; totT += lt; totPend += pend;
     });
-    const taxa2 = totT > 0 ? Math.round(totF/totT*100) : 0;
+    const taxa2 = totT > 0 ? Math.round((totT - totPend) / totT * 100) : 0;
     const txColor = taxa2 >= 80 ? 'var(--ok)' : taxa2 >= 50 ? 'var(--meta)' : taxa2 > 0 ? 'var(--crit)' : 'var(--text3)';
     tbl += '<tr style="border-bottom:1px solid var(--border)">';
     tbl += `<td style="padding:9px 12px;color:var(--text);font-weight:500;white-space:nowrap">${ana}</td>`;
     colsToShow.forEach(s => {
       const c = cells[s];
-      tbl += `<td style="text-align:center;padding:9px 8px;color:${c.f>0?'var(--teal)':'var(--text3)'}">${c.t>0?c.f+'/'+c.t:'—'}</td>`;
+      const label = c.t > 0 ? `${c.f}/${c.t}` : '—';
+      const col = c.f > 0 ? 'var(--teal)' : c.pend > 0 ? 'var(--crit)' : 'var(--text3)';
+      tbl += `<td style="text-align:center;padding:9px 8px;color:${col}">${label}</td>`;
     });
-    tbl += `<td style="text-align:center;padding:9px 12px;color:var(--text);font-weight:700">${totF}</td>`;
+    tbl += `<td style="text-align:center;padding:9px 12px;color:var(--teal);font-weight:700">${totF}</td>`;
+    tbl += `<td style="text-align:center;padding:9px 12px;color:${totPend>0?'var(--crit)':'var(--text3)'};font-weight:700">${totPend}</td>`;
     tbl += `<td style="text-align:center;padding:9px 12px;font-weight:700;color:${txColor}">${totT>0?taxa2+'%':'—'}</td>`;
     tbl += '</tr>';
   });
+
   if (analistasF.length === 0) {
-    tbl += `<tr><td colspan="${colsToShow.length+3}" style="text-align:center;padding:40px;color:var(--text3)">Nenhum dado encontrado</td></tr>`;
+    tbl += `<tr><td colspan="${colsToShow.length+4}" style="text-align:center;padding:40px;color:var(--text3)">Nenhum dado encontrado</td></tr>`;
   }
   tbl += '</tbody></table></div>';
   document.getElementById('ind-ana-tbl').innerHTML = tbl;
 }
 
-function _indSetSec(v) { _indSecFilter = v; if (Object.keys(_indRaw).length > 0) _buildInd(); }
-function _indSetAna(v) { _indAnaFilter = v; if (Object.keys(_indRaw).length > 0) _buildInd(); }
+function _indSetSec(v) { _indSecFilter = v; _indBuild(); }
+function _indSetAna(v) { _indAnaFilter = v; _indBuild(); }
+function _indClearDates() {
+  document.getElementById('ind-date-de').value = '';
+  document.getElementById('ind-date-ate').value = '';
+  _indBuild();
+}
 
 try{const _cn=localStorage.getItem('dep_cli_names');if(_cn)CLI_NAMES=JSON.parse(_cn);}catch(e){}
 try{const _dc=localStorage.getItem('dep_contacts');if(_dc)DEP_CONTACTS=JSON.parse(_dc);}catch(e){}
