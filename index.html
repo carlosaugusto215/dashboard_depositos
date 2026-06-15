@@ -3910,6 +3910,8 @@ async function renderIndicadores() {
   if (btn) btn.disabled = true;
   _indRaw.Chamados = await _gsGet('Chamados');
   if (btn) btn.disabled = false;
+  // Sincroniza dados do Sheets → CH_CONTACTS para que o Chamados reflita o estado real
+  _syncChFromSheets(_indRaw.Chamados);
   const uptEl = document.getElementById('ind-upd-time');
   if (uptEl) uptEl.textContent = new Date().toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
   loading.style.display = 'none';
@@ -3917,10 +3919,36 @@ async function renderIndicadores() {
   _buildInd();
 }
 
-function _indParseDDMM(ddmmyyyy) {
-  if (!ddmmyyyy) return null;
-  const p = ddmmyyyy.split('/');
-  return p.length === 3 ? new Date(+p[2], +p[1]-1, +p[0]) : null;
+// Mescla registros feito=TRUE da Sheets para CH_CONTACTS localStorage
+// Garante que o estado do Sheets é a fonte de verdade sem sobrescrever dados locais mais recentes
+function _syncChFromSheets(sheetsData) {
+  if (!Array.isArray(sheetsData) || sheetsData.length === 0) return;
+  let changed = false;
+  sheetsData.forEach(r => {
+    const feito = r.feito===true||r.feito==='TRUE'||r.feito==='true';
+    const id = String(r.ticket_id||''); if(!id) return;
+    if (feito && !CH_CONTACTS[id]?.feito) {
+      CH_CONTACTS[id] = {feito:true, data:String(r.data_contato||''), obs:String(r.observacao||'')};
+      changed = true;
+    }
+  });
+  if (changed) {
+    localStorage.setItem('ch_contacts', JSON.stringify(CH_CONTACTS));
+    if (typeof renderChContatoKPI === 'function') renderChContatoKPI();
+    if (typeof renderChTbl === 'function') renderChTbl();
+  }
+}
+
+// Parser robusto de datas — suporta dd/mm/yyyy, yyyy-mm-dd e strings nativas do Sheets
+function _indParseDDMM(raw) {
+  if (!raw) return null;
+  const s = String(raw).trim();
+  const m1 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (m1) return new Date(+m1[3], +m1[2]-1, +m1[1]);
+  const m2 = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m2) return new Date(+m2[1], +m2[2]-1, +m2[3]);
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
 }
 
 function _indBuild() { if (_indRaw.Chamados) _buildInd(); }
@@ -4088,7 +4116,7 @@ function _buildInd_OLD_REMOVED() {
 function _buildInd() {
   const deVal = (document.getElementById('ind-date-de')||{}).value || '';
   const ateVal = (document.getElementById('ind-date-ate')||{}).value || '';
-  const fromDate = deVal ? new Date(deVal) : null;
+  const fromDate = deVal ? new Date(deVal + 'T00:00:00') : null;
   const toDate = ateVal ? new Date(ateVal + 'T23:59:59') : null;
   const inDateRange = (ddmm) => {
     if (!fromDate && !toDate) return true;
@@ -4099,20 +4127,23 @@ function _buildInd() {
     return true;
   };
 
+  // Normaliza qualquer formato de data para dd/mm/yyyy (pt-BR)
+  const _normDate = raw => { const d=_indParseDDMM(raw); return d?d.toLocaleDateString('pt-BR'):''; };
+
   // Mapa de contatados: { ticket_id → { gerente, dateStr } }
   const contacted = {};
   (_indRaw.Chamados||[]).forEach(r => {
     const feito = r.feito===true||r.feito==='TRUE'||r.feito==='true';
     const id = String(r.ticket_id||''); if(!id) return;
     const gerente = String(r.gerente||'').trim()||'N/A';
-    const dateStr = r.data_contato?String(r.data_contato).split(' ')[0]:'';
+    const dateStr = _normDate(r.data_contato);
     if(feito) contacted[id]={gerente,dateStr};
     else delete contacted[id];
   });
   Object.entries(CH_CONTACTS||{}).forEach(([tid,c])=>{
     if(c.feito&&!contacted[tid]){
       const t=(CH||[]).find(x=>String(x.ticket_id)===String(tid));
-      if(t) contacted[tid]={gerente:String(t.gerente||'N/A'),dateStr:c.data?String(c.data).split(' ')[0]:''};
+      if(t) contacted[tid]={gerente:String(t.gerente||'N/A'),dateStr:_normDate(c.data)};
     }
   });
 
