@@ -910,7 +910,7 @@ tr:last-child td{border-bottom:none}
 <div class="pg" id="pg-indicadores">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px">
     <div>
-      <div style="font-size:18px;font-weight:700;color:var(--text)">Indicadores — Chamados</div>
+      <div style="font-size:18px;font-weight:700;color:var(--text)" id="ind-title">Indicadores — Chamados</div>
       <div style="font-size:12px;color:var(--text3);margin-top:3px">Contatos registrados · atualizado às <span id="ind-upd-time">—</span></div>
     </div>
     <button onclick="renderIndicadores()" id="ind-refresh-btn" style="padding:8px 16px;border-radius:8px;background:var(--bg3);border:1px solid var(--border);color:var(--text2);cursor:pointer;font-size:12px;display:flex;align-items:center;gap:6px;transition:all .15s">
@@ -923,6 +923,7 @@ tr:last-child td{border-bottom:none}
       <select class="sel" id="ind-ger-filter" onchange="_indSetGer(this.value)">
         <option value="">Todos os gerentes</option>
       </select>
+      <span id="ind-ger-name" style="display:none;font-size:12px;font-weight:600;color:var(--teal);padding:5px 12px;background:rgba(0,229,192,.08);border:1px solid rgba(0,229,192,.3);border-radius:var(--r)"></span>
       <span style="font-size:11px;color:var(--text3)">Período:</span>
       <input type="date" id="ind-date-de" onchange="_indBuild()" style="background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:5px 10px;border-radius:var(--r);font-size:12px;cursor:pointer;outline:none;color-scheme:dark">
       <span style="font-size:11px;color:var(--text3)">até</span>
@@ -3904,7 +3905,15 @@ async function _gsGet(sheetName) {
   }
 }
 
+function _indGetSession() {
+  try { return JSON.parse(localStorage.getItem('dep_session') || '{}'); } catch(e) { return {}; }
+}
+
 async function renderIndicadores() {
+  // Gerente não-admin só enxerga os próprios dados
+  const _sess = _indGetSession();
+  if (_sess.role !== 'admin') _indGerFilter = _sess.name || '';
+
   const loading = document.getElementById('ind-loading');
   const content = document.getElementById('ind-content');
   const btn = document.getElementById('ind-refresh-btn');
@@ -3916,6 +3925,10 @@ async function renderIndicadores() {
   if (btn) btn.disabled = false;
   // Sincroniza dados do Sheets → CH_CONTACTS para que o Chamados reflita o estado real
   _syncChFromSheets(_indRaw.Chamados);
+  // Atualiza título conforme papel do usuário
+  const _s2 = _indGetSession();
+  const titleEl = document.getElementById('ind-title');
+  if (titleEl) titleEl.textContent = _s2.role === 'admin' ? 'Indicadores — Chamados' : 'Meus Indicadores — Chamados';
   const uptEl = document.getElementById('ind-upd-time');
   if (uptEl) uptEl.textContent = new Date().toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
   loading.style.display = 'none';
@@ -4172,8 +4185,21 @@ function _buildInd() {
 
   // Dropdown: mostra todos os gerentes do CH (sem filtro de data)
   const gerentes = [...new Set((CH||[]).map(t=>String(t.gerente||'N/A')))].filter(g=>g&&g!=='N/A').sort();
+
+  // Controle de acesso: gerente não-admin é bloqueado nos próprios dados
+  const _sess = _indGetSession();
+  const _isAdminInd = _sess.role === 'admin';
+  if (!_isAdminInd) _indGerFilter = _sess.name || '';
+
   const gerEl = document.getElementById('ind-ger-filter');
-  if(gerEl) gerEl.innerHTML = '<option value="">Todos os gerentes</option>'+gerentes.map(g=>`<option value="${g}"${g===_indGerFilter?' selected':''}>${g}</option>`).join('');
+  const gerNameEl = document.getElementById('ind-ger-name');
+  if (_isAdminInd) {
+    if (gerEl) { gerEl.style.display = ''; gerEl.innerHTML = '<option value="">Todos os gerentes</option>'+gerentes.map(g=>`<option value="${g}"${g===_indGerFilter?' selected':''}>${g}</option>`).join(''); }
+    if (gerNameEl) gerNameEl.style.display = 'none';
+  } else {
+    if (gerEl) gerEl.style.display = 'none';
+    if (gerNameEl) { gerNameEl.style.display = 'inline-flex'; gerNameEl.textContent = _sess.name || ''; }
+  }
 
   const gerF = _indGerFilter;
   const feitosNoPeriodo = Object.values(contactedFilt).filter(c=>!gerF||c.gerente===gerF).length;
