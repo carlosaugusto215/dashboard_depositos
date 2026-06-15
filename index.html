@@ -3274,7 +3274,7 @@ function renderCBTbl() {
     </div>`;
   };
 
-  const cbDateTbl = CB.length>0?String(CB[0].dia).padStart(2,'0')+'/'+String(CB[0].mes||6).padStart(2,'0')+'/2026':'';
+  const cbDateTbl = CB.length>0 && CB[0].dia ? String(CB[0].dia).padStart(2,'0')+'/'+String(CB[0].mes||6).padStart(2,'0')+'/2026' : '';
   const tblTitle = document.getElementById('cb-tbl-title');
   if(tblTitle) tblTitle.textContent = cbDateTbl ? `Cashback do dia ${cbDateTbl}` : 'Todos os clientes com cashback';
   document.getElementById('cb-tbl').innerHTML = `<table>
