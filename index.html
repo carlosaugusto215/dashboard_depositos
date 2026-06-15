@@ -1869,7 +1869,7 @@ function goTo(id,el){
   if(id==='ativos'){renderYKPIs();renderYT();}
   if(id==='tendencia')renderTR();
   if(id==='analistas')renderAN();
-  if(id==='indicadores'&&Object.keys(_indRaw).length===0)renderIndicadores();
+  if(id==='indicadores'){if(Object.keys(_indRaw).length===0)renderIndicadores();else _buildInd();}
 }
 
 /* IMPORT EXCEL */
