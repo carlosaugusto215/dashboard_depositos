@@ -2226,7 +2226,9 @@ function importXL(ev){
       const wsChName=wb.SheetNames.find(n=>n.toLowerCase().includes('chamado')||n.toLowerCase().includes('ticket'));
       if(wsChName){const rawCh=XLSX.utils.sheet_to_json(wb.Sheets[wsChName],{raw:true,defval:null});
         if(rawCh.length){const ks=Object.keys(rawCh[0]);
+          console.log('[CH import] colunas detectadas:', ks);
           const[chCli,chTkt,chMot,chSub,chDia,chGer]=[fPri(ks,'id externa','solicitante','external','cliente'),fPri(ks,'id do ticket','ticket'),fPri(ks,'motivo'),fPri(ks,'submotivo','sub motivo','sub-motivo'),fPri(ks,'dia','day'),fPri(ks,'gerente','responsav','analista')];
+          console.log('[CH import] submotivo col:', chSub, '| exemplo:', rawCh[0]?.[chSub]);
           if(chCli&&chTkt&&chMot&&chDia&&chGer){
             const newCH=rawCh.map(r=>({cliente_id:String(r[chCli]||'').trim(),ticket_id:String(r[chTkt]||'').trim(),motivo:String(r[chMot]||'').trim(),submotivo:chSub?String(r[chSub]||'').trim():'',dia:parseInt(r[chDia]),gerente:String(r[chGer]||'').trim()})).filter(r=>r.cliente_id&&r.ticket_id&&!isNaN(r.dia));
             const newTkts=new Set(newCH.map(r=>r.ticket_id));
