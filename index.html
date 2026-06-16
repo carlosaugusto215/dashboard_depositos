@@ -4725,7 +4725,7 @@ function renderRanking() {
     d.total=(d.dep['2 dias']||0)+(d.dep['3 dias']||0)+(d.dep['+3 dias']||0)+d.saques+d.chamados;
   });
 
-  const sorted = analistas.filter(a=>D[a].total>0).sort((a,b)=>D[b].total-D[a].total);
+  const sorted = analistas.sort((a,b)=>D[b].total-D[a].total);
 
   // ── Ranking table ──────────────────────────────────────────────
   const medals = ['🥇','🥈','🥉'];
@@ -4756,7 +4756,7 @@ function renderRanking() {
     tbl+='</tr>';
   });
 
-  if(sorted.length===0){
+  if(sorted.every(a=>D[a].total===0)){
     tbl+=`<tr><td colspan="8" style="text-align:center;padding:48px;color:var(--text3)">Nenhum contato registrado no mês</td></tr>`;
   }
 
@@ -4819,8 +4819,8 @@ function renderRanking() {
     t2+='</tr>';
   });
 
-  if(sorted.length===0){
-    t2+=`<tr><td colspan="${2+allDays.length}" style="text-align:center;padding:40px;color:var(--text3)">Nenhum dado disponível</td></tr>`;
+  if(allDays.length===0){
+    t2+=`<tr><td colspan="2" style="text-align:center;padding:40px;color:var(--text3)">Nenhum contato com data registrada</td></tr>`;
   }
   t2+='</tbody></table>';
   document.getElementById('ranking-dia-tbl').innerHTML=t2;
@@ -4837,6 +4837,7 @@ try{const _cn=localStorage.getItem('dep_cli_names');if(_cn)CLI_NAMES=JSON.parse(
 try{const _dc=localStorage.getItem('dep_contacts');if(_dc)DEP_CONTACTS=JSON.parse(_dc);}catch(e){}
 try{const _cv=localStorage.getItem('contacts_v2');if(_cv)CONTACTS=JSON.parse(_cv);}catch(e){}
 try{const _ca=localStorage.getItem('dep_carteira');if(_ca)CARTEIRA=JSON.parse(_ca);}catch(e){}
+try{const _cc=localStorage.getItem('ch_contacts');if(_cc)CH_CONTACTS=JSON.parse(_cc);}catch(e){}
 const _initMM=parseInt(DD.split('/')[1]);updateDaySelects(JD,_initMM);
 if(loadSnap()){applyF();}else{renderTB();renderOV();renderAN();renderCT();}
 checkSession();
