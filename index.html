@@ -999,6 +999,48 @@ tr:last-child td{border-bottom:none}
     <div class="ch"><div class="ct">Detalhamento por Analista</div><div class="cs">feitos / total · pendentes · taxa por categoria</div></div>
     <div id="ind-dep-tbl" style="overflow-x:auto"></div>
   </div>
+
+  <!-- ── CASHBACK ── -->
+  <div style="font-size:15px;font-weight:700;color:var(--text);margin:28px 0 14px;padding-top:10px;border-top:1px solid var(--border)">Indicadores — CashBack</div>
+  <div class="kg" id="ind-cb-kpis" style="margin-bottom:16px"></div>
+  <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:14px;margin-bottom:16px">
+    <div class="card">
+      <div class="ch"><div class="ct">Por Analista</div><div class="cs">feitos vs pendentes</div></div>
+      <div style="height:220px;position:relative"><canvas id="ind-cb-ger-chart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="ch"><div class="ct">Por Faixa</div><div class="cs">distribuição dos contatos por faixa de cashback</div></div>
+      <div style="height:220px;position:relative"><canvas id="ind-cb-fx-chart"></canvas></div>
+    </div>
+  </div>
+  <div class="card" style="margin-bottom:0">
+    <div class="ch"><div class="ct">Detalhamento por Analista</div><div class="cs">feitos / total · pendentes · taxa</div></div>
+    <div id="ind-cb-tbl" style="overflow-x:auto"></div>
+  </div>
+
+  <!-- ── TORNEIOS ── -->
+  <div style="font-size:15px;font-weight:700;color:var(--text);margin:28px 0 14px;padding-top:10px;border-top:1px solid var(--border)">Indicadores — Torneios</div>
+  <div class="kg" id="ind-tn-kpis" style="margin-bottom:16px"></div>
+  <div class="card" style="margin-bottom:16px">
+    <div class="ch"><div class="ct">Por Analista</div><div class="cs">feitos vs pendentes</div></div>
+    <div style="height:220px;position:relative"><canvas id="ind-tn-ger-chart"></canvas></div>
+  </div>
+  <div class="card" style="margin-bottom:0">
+    <div class="ch"><div class="ct">Detalhamento por Analista</div><div class="cs">feitos / total · pendentes · taxa</div></div>
+    <div id="ind-tn-tbl" style="overflow-x:auto"></div>
+  </div>
+
+  <!-- ── GRANDES PERDAS ── -->
+  <div style="font-size:15px;font-weight:700;color:var(--text);margin:28px 0 14px;padding-top:10px;border-top:1px solid var(--border)">Indicadores — Grandes Perdas</div>
+  <div class="kg" id="ind-gp-kpis" style="margin-bottom:16px"></div>
+  <div class="card" style="margin-bottom:16px">
+    <div class="ch"><div class="ct">Por Analista</div><div class="cs">feitos vs pendentes</div></div>
+    <div style="height:220px;position:relative"><canvas id="ind-gp-ger-chart"></canvas></div>
+  </div>
+  <div class="card" style="margin-bottom:0">
+    <div class="ch"><div class="ct">Detalhamento por Analista</div><div class="cs">feitos / total · pendentes · taxa</div></div>
+    <div id="ind-gp-tbl" style="overflow-x:auto"></div>
+  </div>
 </div>
 
 <!-- RANKING -->
@@ -2583,9 +2625,9 @@ function _contactRerender(section){
   switch(section){
     case 'ativos': renderYT(); break;
     case 'saques': renderSKContatoKPI(); renderSKTbl(); break;
-    case 'cashback': renderCBTbl(); break;
-    case 'torneios': renderTNTable(); break;
-    case 'grandesperdas': renderGPTbl(); break;
+    case 'cashback': renderCBTbl(); if(document.getElementById('ind-content')&&document.getElementById('ind-content').style.display!=='none')_buildIndCashback(); break;
+    case 'torneios': renderTNTable(); if(document.getElementById('ind-content')&&document.getElementById('ind-content').style.display!=='none')_buildIndTorneios(); break;
+    case 'grandesperdas': renderGPTbl(); if(document.getElementById('ind-content')&&document.getElementById('ind-content').style.display!=='none')_buildIndGrandesPerdas(); break;
     case 'clientes': renderCT(); break;
   }
 }
@@ -4038,6 +4080,9 @@ let _indChartSkGer = null;
 let _indChartSkEvo = null;
 let _indChartDepGer = null;
 let _indChartDepCat = null;
+let _indChartCBGer  = null;
+let _indChartTNGer  = null;
+let _indChartGPGer  = null;
 
 async function _gsGet(sheetName) {
   try {
@@ -4661,6 +4706,122 @@ function _buildIndDep() {
     tbl+='</tbody></table>';
     tblEl.innerHTML = tbl;
   }
+  _buildIndCashback();
+}
+
+/* ── builder reutilizável: lê datas/role, conta feitos, renderiza KPI+chart+tabela ── */
+function _indBuildContactBlock(source, section, dayField, useMonth, kpisId, gerChartId, tblId){
+  const deVal=(document.getElementById('ind-date-de')||{}).value||'';
+  const ateVal=(document.getElementById('ind-date-ate')||{}).value||'';
+  const fromDate=deVal?new Date(deVal+'T00:00:00'):null;
+  const toDate=ateVal?new Date(ateVal+'T23:59:59'):null;
+  const fromDay=fromDate?fromDate.getDate():null;
+  const toDay=toDate?toDate.getDate():null;
+  const fromMo=fromDate?fromDate.getMonth()+1:null;
+  const toMo=toDate?toDate.getMonth()+1:null;
+  const _sess=_indGetSession();
+  const gerF=(_sess.role==='admin')?_indGerFilter:(_sess.name||'');
+
+  const filt=(source||[]).filter(r=>{
+    if(useMonth&&r.mes!==undefined&&r.mes!==curMm)return false;
+    if(useMonth&&fromMo!==null&&fromMo!==curMm)return false;
+    if(useMonth&&toMo!==null&&toMo!==curMm)return false;
+    if(fromDay!==null&&dayField&&r[dayField]!==undefined&&r[dayField]<fromDay)return false;
+    if(toDay!==null&&dayField&&r[dayField]!==undefined&&r[dayField]>toDay)return false;
+    if(gerF&&r.analista!==gerF)return false;
+    return true;
+  });
+
+  const analistas=gerF?[gerF]:[...new Set(filt.map(r=>r.analista))].filter(Boolean).sort();
+  const totByAn={},feiByAn={};
+  filt.forEach(r=>{
+    const a=r.analista||'N/A';
+    totByAn[a]=(totByAn[a]||0)+1;
+    if(_getContact(section,String(r.external_id)).feito)feiByAn[a]=(feiByAn[a]||0)+1;
+  });
+
+  const totG=analistas.reduce((s,a)=>s+(totByAn[a]||0),0);
+  const feiG=analistas.reduce((s,a)=>s+(feiByAn[a]||0),0);
+  const pendG=Math.max(0,totG-feiG);
+  const taxa=totG>0?Math.round(feiG/totG*100):0;
+  const perLabel=(fromDate||toDate)?((fromDate?fromDate.toLocaleDateString('pt-BR'):'início')+' a '+(toDate?toDate.toLocaleDateString('pt-BR'):'hoje')):'mês atual';
+
+  const kpiEl=document.getElementById(kpisId);
+  if(kpiEl)kpiEl.innerHTML=
+    `<div class="kc tl"><div class="kl">Total no Período</div><div class="kv">${totG}</div><div class="kf">${feiG} contatados · ${perLabel}</div></div>`+
+    `<div class="kc gn"><div class="kl">Taxa de Contato</div><div class="kv">${taxa}%</div><div class="kf">de ${totG} clientes</div></div>`+
+    `<div class="kc rd"><div class="kl">Pendentes</div><div class="kv">${pendG}</div><div class="kf">checklist desmarcado</div></div>`;
+
+  const anChart=analistas.filter(a=>(totByAn[a]||0)>0);
+  const ctx=document.getElementById(gerChartId);
+  // destroy-before-recreate via data attribute
+  if(ctx&&ctx._chInst){try{ctx._chInst.destroy();}catch(e){}ctx._chInst=null;}
+  if(ctx){
+    ctx._chInst=new Chart(ctx,{type:'bar',data:{labels:anChart,datasets:[
+      {label:'Contatados',data:anChart.map(a=>feiByAn[a]||0),backgroundColor:'#10b981',borderRadius:4},
+      {label:'Pendentes',data:anChart.map(a=>Math.max(0,(totByAn[a]||0)-(feiByAn[a]||0))),backgroundColor:'rgba(239,68,68,.45)',borderRadius:4}
+    ]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'#7c8fa8',font:{size:11},boxWidth:10}}},
+      scales:{x:{stacked:true,beginAtZero:true,grid:{color:'#252a3d'},ticks:{color:'#7c8fa8',font:{size:10}}},
+              y:{stacked:true,grid:{color:'#252a3d'},ticks:{color:'#7c8fa8',font:{size:10}}}}}});
+  }
+
+  const tblEl=document.getElementById(tblId);
+  if(tblEl){
+    let tbl='<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="border-bottom:1px solid var(--border)">';
+    ['Analista','Feitos / Total','Pendentes','Taxa'].forEach((h,i)=>{
+      tbl+=`<th style="text-align:${i===0?'left':'center'};padding:9px 12px;color:var(--text3);font-weight:600">${h}</th>`;
+    });
+    tbl+='</tr></thead><tbody>';
+    analistas.filter(a=>(totByAn[a]||0)>0).forEach(a=>{
+      const tot=totByAn[a]||0,fe=feiByAn[a]||0,pend=Math.max(0,tot-fe),tx=tot>0?Math.round(fe/tot*100):0;
+      const txC=tx>=80?'var(--ok)':tx>=50?'var(--meta)':tx>0?'var(--crit)':'var(--text3)';
+      tbl+=`<tr style="border-bottom:1px solid var(--border)">`;
+      tbl+=`<td style="padding:9px 12px;color:var(--text);font-weight:500">${a}</td>`;
+      tbl+=`<td style="text-align:center;padding:9px 12px;color:var(--teal)">${fe} / ${tot}</td>`;
+      tbl+=`<td style="text-align:center;padding:9px 12px;color:${pend>0?'var(--crit)':'var(--text3)'};font-weight:700">${pend}</td>`;
+      tbl+=`<td style="text-align:center;padding:9px 12px;font-weight:700;color:${txC}">${tx}%</td></tr>`;
+    });
+    if(!analistas.some(a=>(totByAn[a]||0)>0))tbl+=`<tr><td colspan="4" style="text-align:center;padding:40px;color:var(--text3)">Nenhum dado encontrado</td></tr>`;
+    tbl+='</tbody></table>';
+    tblEl.innerHTML=tbl;
+  }
+
+  return {filt, totByAn, feiByAn, analistas};
+}
+
+function _buildIndCashback(){
+  const r=_indBuildContactBlock(CB,'cashback','dia',true,'ind-cb-kpis','ind-cb-ger-chart','ind-cb-tbl');
+
+  // Gráfico extra: por faixa de cashback
+  const FAIXAS=['+1k','500–1k','100–500','<100'];
+  const fxTot={},fxFe={};
+  FAIXAS.forEach(f=>{fxTot[f]=0;fxFe[f]=0;});
+  r.filt.forEach(row=>{
+    const f=row.faixa&&FAIXAS.includes(row.faixa)?row.faixa:'<100';
+    fxTot[f]++;
+    if(_getContact('cashback',String(row.external_id)).feito)fxFe[f]++;
+  });
+  const ctx2=document.getElementById('ind-cb-fx-chart');
+  if(ctx2&&ctx2._chInst){try{ctx2._chInst.destroy();}catch(e){}ctx2._chInst=null;}
+  if(ctx2)ctx2._chInst=new Chart(ctx2,{type:'bar',data:{labels:FAIXAS,datasets:[
+    {label:'Contatados',data:FAIXAS.map(f=>fxFe[f]||0),backgroundColor:'#10b981',borderRadius:5},
+    {label:'Pendentes',data:FAIXAS.map(f=>Math.max(0,(fxTot[f]||0)-(fxFe[f]||0))),backgroundColor:'rgba(239,68,68,.45)',borderRadius:5}
+  ]},options:{responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{labels:{color:'#7c8fa8',font:{size:11},boxWidth:10}}},
+    scales:{x:{stacked:true,grid:{color:'#252a3d'},ticks:{color:'#7c8fa8',font:{size:10}}},
+            y:{stacked:true,beginAtZero:true,grid:{color:'#252a3d'},ticks:{color:'#7c8fa8',font:{size:10}}}}}});
+
+  _buildIndTorneios();
+}
+
+function _buildIndTorneios(){
+  _indBuildContactBlock(TN,'torneios',null,false,'ind-tn-kpis','ind-tn-ger-chart','ind-tn-tbl');
+  _buildIndGrandesPerdas();
+}
+
+function _buildIndGrandesPerdas(){
+  _indBuildContactBlock(GP,'grandesperdas','dia',false,'ind-gp-kpis','ind-gp-ger-chart','ind-gp-tbl');
 }
 
 function renderRanking() {
