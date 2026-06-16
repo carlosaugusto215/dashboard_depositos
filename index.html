@@ -1084,6 +1084,14 @@ function cliN(id){
 }
 function cliNm(id){return CLI_NAMES[String(id)]||String(id);}
 function applyF(){
+  // Garante que analistas não-admin nunca vejam dados de outros analistas
+  try{
+    const _s=JSON.parse(localStorage.getItem('dep_session')||'{}');
+    if(_s.role&&_s.role!=='admin'){
+      const _sel=document.getElementById('g-an');
+      if(_sel&&_sel.value!==_s.name)_sel.value=_s.name;
+    }
+  }catch(e){}
   renderTB();renderOV();renderAN();renderCT();renderTR();
   if(document.getElementById('pg-carteira').classList.contains('on'))renderCarteira();
   renderYKPIs();renderYT();
