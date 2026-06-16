@@ -2029,10 +2029,10 @@ function goTo(id,el){
   if(id==='indicadores'){_indShowSec(_indSection);if(Object.keys(_indRaw).length===0)renderIndicadores();else _indBuildActive();}
   if(id==='ranking'){
     renderRanking();
-    // Sincroniza todas as fontes de contato do Sheets em paralelo e re-renderiza ao completar cada uma
+    // Sincroniza todas as fontes de contato em paralelo usando o mesmo endpoint das escritas
     _gsGet('Chamados').then(d=>{if(d&&d.length){_indRaw.Chamados=d;try{_syncChFromSheets(d);}catch(e){}renderRanking();}}).catch(()=>{});
     [['Saques','saques'],['CashBack','cashback'],['Torneios','torneios'],['GrandesPerdas','grandesperdas']].forEach(([sh,sec])=>{
-      _gsGet(sh).then(d=>{if(d&&d.length){_syncContactSectionFromSheets(d,sec);renderRanking();}}).catch(()=>{});
+      _gsGetContacts(sh).then(d=>{if(d&&d.length){_syncContactSectionFromSheets(d,sec);renderRanking();}}).catch(()=>{});
     });
   }
 }
@@ -4134,6 +4134,20 @@ async function _gsGet(sheetName) {
   }
 }
 
+// Variante de _gsGet que usa o mesmo endpoint das escritas de contato (ch_gs_url || GS_SHEETS_URL).
+// Garante que leituras e escritas de status de contato usem a mesma planilha.
+async function _gsGetContacts(sheetName) {
+  const url = localStorage.getItem('ch_gs_url') || GS_SHEETS_URL;
+  try {
+    const res = await fetch(url + '?action=get&sheet_name=' + encodeURIComponent(sheetName) + '&_t=' + Date.now());
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  } catch(e) {
+    console.warn('[CONTACTS] Erro ao buscar', sheetName, ':', e.message);
+    return [];
+  }
+}
+
 function _indGetSession() {
   try { return JSON.parse(localStorage.getItem('dep_session') || '{}'); } catch(e) { return {}; }
 }
@@ -4154,10 +4168,10 @@ async function renderIndicadores() {
   if (btn) btn.disabled = false;
   // Sincroniza dados do Sheets → CH_CONTACTS para que o Chamados reflita o estado real
   _syncChFromSheets(_indRaw.Chamados);
-  // Sincroniza demais seções de contato em paralelo (saques, cashback, torneios, grandesperdas)
+  // Sincroniza demais seções de contato em paralelo usando o mesmo endpoint das escritas
   // Garante que contatos marcados por qualquer gerente apareçam para todos
   [['Saques','saques'],['CashBack','cashback'],['Torneios','torneios'],['GrandesPerdas','grandesperdas']].forEach(([sh,sec])=>{
-    _gsGet(sh).then(d=>{if(d&&d.length)_syncContactSectionFromSheets(d,sec);}).catch(()=>{});
+    _gsGetContacts(sh).then(d=>{if(d&&d.length)_syncContactSectionFromSheets(d,sec);}).catch(()=>{});
   });
   // Atualiza título conforme papel do usuário
   const _s2 = _indGetSession();
@@ -4198,10 +4212,13 @@ function _syncContactSectionFromSheets(sheetsData, section) {
   if (!CONTACTS[section]) CONTACTS[section] = {};
   let changed = false;
   sheetsData.forEach(r => {
-    const feito = r.feito===true||r.feito==='TRUE'||r.feito==='true';
-    const id = String(r.client_id||''); if(!id) return;
+    const feito = r.feito===true||r.feito==='TRUE'||r.feito==='true'||
+                  r.Feito===true||r.Feito==='TRUE'||r.Feito==='true';
+    // Aceita client_id ou external_id como campo de identificação (App Scripts podem variar)
+    const id = String(r.client_id||r.external_id||r.clientId||r.externalId||'');
+    if(!id) return;
     if (feito && !CONTACTS[section][id]?.feito) {
-      CONTACTS[section][id] = {feito:true, data:String(r.data_contato||''), obs:String(r.observacao||'')};
+      CONTACTS[section][id] = {feito:true, data:String(r.data_contato||r.dataContato||''), obs:String(r.observacao||r.obs||'')};
       changed = true;
     }
   });
