@@ -577,6 +577,12 @@ tr:last-child td{border-bottom:none}
     </div>
   </div>
 
+  <!-- contato kpi bar -->
+  <div class="card" style="margin-bottom:16px">
+    <div class="ch"><div class="ct">Contatos realizados — Saques</div><div class="cs">feitos / total por analista</div></div>
+    <div id="sk-contato-kpi" style="display:flex;gap:10px;flex-wrap:wrap;margin-top:4px"></div>
+  </div>
+
   <!-- tabela -->
   <div class="card">
     <div class="ch">
@@ -589,6 +595,9 @@ tr:last-child td{border-bottom:none}
           <div class="pill on" onclick="setSKFilter(this,'all')">Todos</div>
           <div class="pill" onclick="setSKFilter(this,'destaque')" style="border-color:rgba(239,68,68,.4);color:#f87171">⚠ +50k</div>
         </div>
+        <button id="sk-cf-pend" onclick="setSKContatoFilter('pendente')" style="padding:4px 10px;border-radius:var(--r);font-size:11px;cursor:pointer;border:1px solid rgba(239,68,68,.4);background:rgba(239,68,68,.08);color:#ef4444">Pendentes</button>
+        <button id="sk-cf-feito" onclick="setSKContatoFilter('feito')" style="padding:4px 10px;border-radius:var(--r);font-size:11px;cursor:pointer;border:1px solid rgba(16,185,129,.4);background:rgba(16,185,129,.08);color:#10b981">Contatados</button>
+        <button id="sk-cf-all" onclick="setSKContatoFilter('all')" style="padding:4px 10px;border-radius:var(--r);font-size:11px;cursor:pointer;border:1px solid var(--border);background:var(--bg3);color:var(--text3);display:none">Limpar filtro</button>
         <input type="text" class="si" placeholder="Buscar cliente…" id="sk-s" oninput="renderSKTbl()" style="width:180px">
         <select class="sel" id="sk-so" onchange="renderSKTbl()">
           <option value="val">Maior valor</option>
@@ -2520,7 +2529,7 @@ function _contactClient(section, id){
 function _contactRerender(section){
   switch(section){
     case 'ativos': renderYT(); break;
-    case 'saques': renderSKTbl(); break;
+    case 'saques': renderSKContatoKPI(); renderSKTbl(); break;
     case 'cashback': renderCBTbl(); break;
     case 'torneios': renderTNTable(); break;
     case 'grandesperdas': renderGPTbl(); break;
@@ -2813,7 +2822,7 @@ function renderChTbl() {
 function sChPg(p) { chPg = p; renderChTbl(); }
 
 /* ── SAQUES ─────────────────────────────── */
-let skDay = null, skPg = 1, skFilter = 'all';
+let skDay = null, skPg = 1, skFilter = 'all', skContatoFilter = 'all';
 const SK_PS = 20;
 const SK_PAL = ['#2563eb','#10b981','#f59e0b','#8b5cf6','#ef4444','#06b6d4'];
 
@@ -3068,6 +3077,9 @@ function renderSKTbl() {
   const so = document.getElementById('sk-so').value;
   let data = getSKFiltered();
   if (s) data = data.filter(r => r.external_id.includes(s) || r.analista.toLowerCase().includes(s));
+  if (skContatoFilter === 'pendente') data = data.filter(r => !_getContact('saques', r.external_id).feito);
+  if (skContatoFilter === 'feito')    data = data.filter(r =>  _getContact('saques', r.external_id).feito);
+  renderSKContatoKPI();
   const sorters = {
     val: (a,b) => b.valor - a.valor,
     dia: (a,b) => a.dia - b.dia,
@@ -3134,6 +3146,56 @@ function renderSKTbl() {
   document.getElementById('sk-pag').innerHTML = `<span>${(skPg-1)*SK_PS+1}–${Math.min(skPg*SK_PS,tot)} de ${tot} registros</span><div class="pbr">${btns}</div>`;
 }
 function sSKPg(p) { skPg = p; renderSKTbl(); }
+
+function setSKContatoFilter(f) {
+  skContatoFilter = f; skPg = 1;
+  const bPend = document.getElementById('sk-cf-pend');
+  const bFeit = document.getElementById('sk-cf-feito');
+  const bAll  = document.getElementById('sk-cf-all');
+  if(bPend) bPend.style.fontWeight = f==='pendente'?'700':'400';
+  if(bFeit) bFeit.style.fontWeight = f==='feito'?'700':'400';
+  if(bAll)  bAll.style.display = f!=='all'?'':'none';
+  renderSKTbl();
+}
+
+function renderSKContatoKPI() {
+  const el = document.getElementById('sk-contato-kpi');
+  if (!el) return;
+  const all = getSKFiltered();
+  const byAn = {};
+  all.forEach(r => {
+    if (!byAn[r.analista]) byAn[r.analista] = {total:0, feito:0};
+    byAn[r.analista].total++;
+    if (_getContact('saques', r.external_id).feito) byAn[r.analista].feito++;
+  });
+  const sorted = Object.entries(byAn).sort((a,b) => b[1].total - a[1].total);
+  const totalAll = all.length, totalFeito = all.filter(r => _getContact('saques', r.external_id).feito).length;
+  el.innerHTML = sorted.map(([an, v]) => {
+    const pct = v.total > 0 ? Math.round(v.feito / v.total * 100) : 0;
+    const col = pct === 100 ? '#10b981' : pct >= 60 ? '#f59e0b' : '#ef4444';
+    const firstName = an.split(' ')[0];
+    return `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 14px;min-width:140px;flex:1">
+      <div style="font-size:11px;color:var(--text3);margin-bottom:4px;font-weight:600">${firstName}</div>
+      <div style="display:flex;align-items:baseline;gap:4px">
+        <span style="font-size:20px;font-weight:700;color:${col}">${v.feito}</span>
+        <span style="font-size:12px;color:var(--text3)">/ ${v.total}</span>
+        <span style="font-size:10px;font-weight:600;color:${col};margin-left:2px">${pct}%</span>
+      </div>
+      <div style="height:3px;background:var(--bg4);border-radius:99px;margin-top:6px;overflow:hidden">
+        <div style="height:100%;width:${pct}%;background:${col};border-radius:99px;transition:width .4s"></div>
+      </div>
+    </div>`;
+  }).join('') + `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;min-width:120px">
+    <div style="font-size:11px;color:var(--text3);margin-bottom:4px;font-weight:600">Total</div>
+    <div style="display:flex;align-items:baseline;gap:4px">
+      <span style="font-size:20px;font-weight:700;color:var(--teal)">${totalFeito}</span>
+      <span style="font-size:12px;color:var(--text3)">/ ${totalAll}</span>
+    </div>
+    <div style="height:3px;background:var(--bg4);border-radius:99px;margin-top:6px;overflow:hidden">
+      <div style="height:100%;width:${totalAll>0?Math.round(totalFeito/totalAll*100):0}%;background:var(--teal);border-radius:99px"></div>
+    </div>
+  </div>`;
+}
 
 /* ── CASHBACK ─────────────────────────── */
 let cbPg = 1, cbFaixa = '';
@@ -4306,9 +4368,8 @@ function _buildIndSaques() {
   const _sess = _indGetSession();
   const _isAdm = _sess.role === 'admin';
   const gerF = _isAdm ? _indGerFilter : (_sess.name || '');
-  const fmt = v => 'R$'+Number(v).toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:0});
 
-  // Filtra SK: mês corrente + faixa de dias
+  // Filtra SK: mês corrente + faixa de dias + analista
   const skFilt = (SK||[]).filter(r => {
     if (r.mes !== curMm) return false;
     if (fromMo !== null && fromMo !== curMm) return false;
@@ -4319,77 +4380,81 @@ function _buildIndSaques() {
     return true;
   });
 
-  // Analistas únicos presentes no período
-  const analistas = gerF ? [gerF] : [...new Set((SK||[]).filter(r=>r.mes===curMm).map(r=>r.analista))].filter(Boolean).sort();
-
-  // Agregados por analista
-  const byAn = {};
+  // Clientes únicos por analista no período (o contato é por cliente, não por linha)
+  const clientsByAn = {};
   skFilt.forEach(r => {
     const a = r.analista || 'N/A';
-    if (!byAn[a]) byAn[a] = {vol:0, dep:0, qtd:0, dest:0};
-    byAn[a].vol  += r.valor || 0;
-    byAn[a].dep  += r.dep_dia || 0;
-    byAn[a].qtd  += r.count_saque || 0;
-    byAn[a].dest += r.destaque ? 1 : 0;
+    if (!clientsByAn[a]) clientsByAn[a] = new Set();
+    clientsByAn[a].add(String(r.external_id));
+  });
+  const analistas = gerF ? [gerF] : [...new Set(skFilt.map(r=>r.analista))].filter(Boolean).sort();
+
+  // Contatos feitos por analista
+  const totalByAn = {}, feitoByAn = {}, contatadoDataMap = {};
+  analistas.forEach(a => {
+    const ids = clientsByAn[a] || new Set();
+    totalByAn[a] = ids.size;
+    feitoByAn[a] = 0;
+    ids.forEach(id => {
+      const c = _getContact('saques', id);
+      if (c.feito) {
+        feitoByAn[a]++;
+        if (c.data) contatadoDataMap[c.data] = (contatadoDataMap[c.data]||0)+1;
+      }
+    });
   });
 
-  // KPIs globais (ou do analista filtrado)
-  const totalVol  = skFilt.reduce((s,r)=>s+(r.valor||0),0);
-  const totalDep  = skFilt.reduce((s,r)=>s+(r.dep_dia||0),0);
-  const totalQtd  = skFilt.reduce((s,r)=>s+(r.count_saque||0),0);
-  const totalDest = skFilt.filter(r=>r.destaque).length;
-  const netSaldo  = totalDep - totalVol;
-  const periodoLabel = (fromDate||toDate)?(fromDate?fromDate.toLocaleDateString('pt-BR'):'início')+' a '+(toDate?toDate.toLocaleDateString('pt-BR'):'hoje'):'mês atual';
+  const totalClientes = analistas.reduce((s,a)=>s+(totalByAn[a]||0),0);
+  const totalFeitos   = analistas.reduce((s,a)=>s+(feitoByAn[a]||0),0);
+  const pendentes     = Math.max(0, totalClientes - totalFeitos);
+  const taxa          = totalClientes>0?Math.round(totalFeitos/totalClientes*100):0;
+  const hojeStr       = new Date().toLocaleDateString('pt-BR');
+  const hojeCount     = (contatadoDataMap[hojeStr]||0) + Object.values(contatadoDataMap).filter((_,i)=>Object.keys(contatadoDataMap)[i]===hojeStr).length;
+  const periodoLabel  = (fromDate||toDate)?(fromDate?fromDate.toLocaleDateString('pt-BR'):'início')+' a '+(toDate?toDate.toLocaleDateString('pt-BR'):'hoje'):'mês atual';
 
   document.getElementById('ind-sk-kpis').innerHTML =
-    `<div class="kc tl"><div class="kl">Volume de Saques</div><div class="kv">${fmt(totalVol)}</div><div class="kf">${totalQtd} operações · ${periodoLabel}</div></div>`+
-    `<div class="kc rd"><div class="kl">Destaques (+50k)</div><div class="kv">${totalDest}</div><div class="kf">saques acima de R$50.000</div></div>`+
-    `<div class="kc ${netSaldo>=0?'gn':'rd'}"><div class="kl">Saldo Net</div><div class="kv">${fmt(netSaldo)}</div><div class="kf">dep ${fmt(totalDep)} − saq ${fmt(totalVol)}</div></div>`+
-    `<div class="kc am"><div class="kl">Volume Médio/Saque</div><div class="kv">${totalQtd>0?fmt(Math.round(totalVol/totalQtd)):'—'}</div><div class="kf">por operação no período</div></div>`;
+    `<div class="kc tl"><div class="kl">Clientes no Período</div><div class="kv">${totalClientes}</div><div class="kf">${totalFeitos} contatados · ${periodoLabel}</div></div>`+
+    `<div class="kc gn"><div class="kl">Taxa de Contato</div><div class="kv">${taxa}%</div><div class="kf">de ${totalClientes} clientes</div></div>`+
+    `<div class="kc rd"><div class="kl">Pendentes</div><div class="kv">${pendentes}</div><div class="kf">checklist desmarcado</div></div>`+
+    `<div class="kc am"><div class="kl">Contatados Hoje</div><div class="kv">${Object.entries(contatadoDataMap).filter(([d])=>d.startsWith(hojeStr.substring(0,5))).reduce((s,[,v])=>s+v,0)}</div><div class="kf">em ${hojeStr}</div></div>`;
 
-  // Gráfico por analista
-  const anChart = analistas.filter(a=>byAn[a]);
-  const volData = anChart.map(a=>(byAn[a]||{vol:0}).vol);
-  const depData = anChart.map(a=>(byAn[a]||{dep:0}).dep);
+  // Gráfico por analista — feitos vs pendentes
+  const anChart = analistas.filter(a=>totalByAn[a]>0);
   const ctx1 = document.getElementById('ind-sk-ger-chart');
   if(_indChartSkGer){_indChartSkGer.destroy();_indChartSkGer=null;}
   if(ctx1) _indChartSkGer=new Chart(ctx1,{type:'bar',data:{labels:anChart,datasets:[
-    {label:'Saques',data:volData,backgroundColor:'rgba(239,68,68,.6)',borderRadius:4},
-    {label:'Depósitos',data:depData,backgroundColor:'rgba(16,185,129,.45)',borderRadius:4}
+    {label:'Contatados',data:anChart.map(a=>feitoByAn[a]||0),backgroundColor:'#10b981',borderRadius:4},
+    {label:'Pendentes',data:anChart.map(a=>Math.max(0,(totalByAn[a]||0)-(feitoByAn[a]||0))),backgroundColor:'rgba(239,68,68,.45)',borderRadius:4}
   ]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
     plugins:{legend:{labels:{color:'#7c8fa8',font:{size:11},boxWidth:10}}},
-    scales:{x:{beginAtZero:true,grid:{color:'#252a3d'},ticks:{color:'#7c8fa8',font:{size:10},callback:v=>v>=1000?'R$'+(v/1000).toFixed(0)+'k':'R$'+v}},
-            y:{grid:{color:'#252a3d'},ticks:{color:'#7c8fa8',font:{size:10}}}}}});
+    scales:{x:{stacked:true,beginAtZero:true,grid:{color:'#252a3d'},ticks:{color:'#7c8fa8',font:{size:10}}},
+            y:{stacked:true,grid:{color:'#252a3d'},ticks:{color:'#7c8fa8',font:{size:10}}}}}});
 
-  // Gráfico evolução diária
-  const dayMap = {};
-  skFilt.forEach(r=>{const d=String(r.dia).padStart(2,'0')+'/'+String(curMm).padStart(2,'0');dayMap[d]=(dayMap[d]||0)+(r.valor||0);});
-  const days = Object.keys(dayMap).sort((a,b)=>{const [da,ma]=a.split('/').map(Number),[db,mb]=b.split('/').map(Number);return ma!==mb?ma-mb:da-db;});
+  // Gráfico evolução — data dos contatos feitos
+  const days = Object.keys(contatadoDataMap).sort((a,b)=>{const pa=a.split('/'),pb=b.split('/');return new Date(+pa[2],+pa[1]-1,+pa[0])-new Date(+pb[2],+pb[1]-1,+pb[0]);});
   const ctx2 = document.getElementById('ind-sk-evo-chart');
   if(_indChartSkEvo){_indChartSkEvo.destroy();_indChartSkEvo=null;}
-  if(ctx2) _indChartSkEvo=new Chart(ctx2,{type:'line',data:{labels:days,datasets:[{label:'Volume',data:days.map(d=>dayMap[d]),borderColor:'#ef4444',backgroundColor:'rgba(239,68,68,.1)',tension:0.3,fill:true,pointRadius:4,pointBackgroundColor:'#ef4444'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#7c8fa8',font:{size:11},boxWidth:10}}},scales:{x:{grid:{color:'#252a3d'},ticks:{color:'#7c8fa8',font:{size:10}}},y:{beginAtZero:true,grid:{color:'#252a3d'},ticks:{color:'#7c8fa8',font:{size:10},callback:v=>v>=1000?'R$'+(v/1000).toFixed(0)+'k':'R$'+v}}}}});
+  if(ctx2) _indChartSkEvo=new Chart(ctx2,{type:'line',data:{labels:days,datasets:[{label:'Contatados',data:days.map(d=>contatadoDataMap[d]),borderColor:'#00e5c0',backgroundColor:'rgba(0,229,192,.1)',tension:0.3,fill:true,pointRadius:4,pointBackgroundColor:'#00e5c0'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#7c8fa8',font:{size:11},boxWidth:10}}},scales:{x:{grid:{color:'#252a3d'},ticks:{color:'#7c8fa8',font:{size:10}}},y:{beginAtZero:true,grid:{color:'#252a3d'},ticks:{color:'#7c8fa8',font:{size:10}}}}}});
 
   // Tabela por analista
-  const anTbl = gerF ? [gerF] : analistas.filter(a=>byAn[a]);
   let tbl='<table style="width:100%;border-collapse:collapse;font-size:12px">';
   tbl+='<thead><tr style="border-bottom:1px solid var(--border)">';
   tbl+='<th style="text-align:left;padding:9px 12px;color:var(--text3);font-weight:600">Analista</th>';
-  tbl+='<th style="text-align:right;padding:9px 12px;color:var(--text3);font-weight:600">Volume Saques</th>';
-  tbl+='<th style="text-align:center;padding:9px 12px;color:var(--text3);font-weight:600">Qtd</th>';
-  tbl+='<th style="text-align:center;padding:9px 12px;color:var(--text3);font-weight:600">Destaques</th>';
-  tbl+='<th style="text-align:right;padding:9px 12px;color:var(--text3);font-weight:600">Net (Dep−Saq)</th></tr></thead><tbody>';
-  anTbl.forEach(a=>{
-    const d=byAn[a]||{vol:0,dep:0,qtd:0,dest:0};
-    const net=d.dep-d.vol;
+  tbl+='<th style="text-align:center;padding:9px 12px;color:var(--text3);font-weight:600">Feitos / Total</th>';
+  tbl+='<th style="text-align:center;padding:9px 12px;color:var(--text3);font-weight:600">Pendentes</th>';
+  tbl+='<th style="text-align:center;padding:9px 12px;color:var(--text3);font-weight:600">Taxa</th></tr></thead><tbody>';
+  analistas.filter(a=>totalByAn[a]>0).forEach(a=>{
+    const tot=totalByAn[a]||0, fe=feitoByAn[a]||0;
+    const pend=Math.max(0,tot-fe), tx=tot>0?Math.round(fe/tot*100):0;
+    const txColor=tx>=80?'var(--ok)':tx>=50?'var(--meta)':tx>0?'var(--crit)':'var(--text3)';
     tbl+='<tr style="border-bottom:1px solid var(--border)">';
     tbl+=`<td style="padding:9px 12px;color:var(--text);font-weight:500">${a}</td>`;
-    tbl+=`<td style="text-align:right;padding:9px 12px;color:var(--crit);font-weight:600">${fmt(d.vol)}</td>`;
-    tbl+=`<td style="text-align:center;padding:9px 12px;color:var(--text2)">${d.qtd}</td>`;
-    tbl+=`<td style="text-align:center;padding:9px 12px;color:${d.dest>0?'var(--meta)':'var(--text3)'};font-weight:${d.dest>0?'700':'400'}">${d.dest}</td>`;
-    tbl+=`<td style="text-align:right;padding:9px 12px;font-weight:700;color:${net>=0?'var(--ok)':'var(--crit)'}">${fmt(net)}</td>`;
+    tbl+=`<td style="text-align:center;padding:9px 12px;color:var(--teal)">${fe} / ${tot}</td>`;
+    tbl+=`<td style="text-align:center;padding:9px 12px;color:${pend>0?'var(--crit)':'var(--text3)'};font-weight:700">${pend}</td>`;
+    tbl+=`<td style="text-align:center;padding:9px 12px;font-weight:700;color:${txColor}">${tot>0?tx+'%':'—'}</td>`;
     tbl+='</tr>';
   });
-  if(anTbl.length===0){tbl+=`<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text3)">Nenhum dado de saques encontrado</td></tr>`;}
+  if(analistas.filter(a=>totalByAn[a]>0).length===0){tbl+=`<tr><td colspan="4" style="text-align:center;padding:40px;color:var(--text3)">Nenhum dado encontrado</td></tr>`;}
   tbl+='</tbody></table>';
   document.getElementById('ind-sk-tbl').innerHTML=tbl;
 }
