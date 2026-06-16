@@ -3077,8 +3077,8 @@ function renderSKTbl() {
   const so = document.getElementById('sk-so').value;
   let data = getSKFiltered();
   if (s) data = data.filter(r => r.external_id.includes(s) || r.analista.toLowerCase().includes(s));
-  if (skContatoFilter === 'pendente') data = data.filter(r => !_getContact('saques', r.external_id).feito);
-  if (skContatoFilter === 'feito')    data = data.filter(r =>  _getContact('saques', r.external_id).feito);
+  if (skContatoFilter === 'pendente') data = data.filter(r => r.valor >= 49000 && !_getContact('saques', r.external_id).feito);
+  if (skContatoFilter === 'feito')    data = data.filter(r => r.valor >= 49000 &&  _getContact('saques', r.external_id).feito);
   renderSKContatoKPI();
   const sorters = {
     val: (a,b) => b.valor - a.valor,
@@ -3117,7 +3117,7 @@ function renderSKTbl() {
               : 'background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.2);')
           : '';
         return `<tr style="${rowStyle}">
-          ${_chkBtn('saques',r.external_id)}
+          ${r.valor >= 49000 ? _chkBtn('saques',r.external_id) : '<td></td>'}
           <td>${cliN(r.external_id)}</td>
           <td style="font-size:11px;color:var(--text2)">${r.date}</td>
           <td style="color:var(--text);font-weight:600">${r.dia<10?'0'+r.dia:r.dia}/06</td>
@@ -3161,7 +3161,7 @@ function setSKContatoFilter(f) {
 function renderSKContatoKPI() {
   const el = document.getElementById('sk-contato-kpi');
   if (!el) return;
-  const all = getSKFiltered();
+  const all = getSKFiltered().filter(r => r.valor >= 49000);
   const byAn = {};
   all.forEach(r => {
     if (!byAn[r.analista]) byAn[r.analista] = {total:0, feito:0};
@@ -4369,9 +4369,10 @@ function _buildIndSaques() {
   const _isAdm = _sess.role === 'admin';
   const gerF = _isAdm ? _indGerFilter : (_sess.name || '');
 
-  // Filtra SK: mês corrente + faixa de dias + analista
+  // Filtra SK: mês corrente + faixa de dias + analista + apenas saques >= 49k
   const skFilt = (SK||[]).filter(r => {
     if (r.mes !== curMm) return false;
+    if (r.valor < 49000) return false;
     if (fromMo !== null && fromMo !== curMm) return false;
     if (toMo   !== null && toMo   !== curMm) return false;
     if (fromDay !== null && r.dia < fromDay) return false;
