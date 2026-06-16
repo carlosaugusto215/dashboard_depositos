@@ -978,6 +978,24 @@ tr:last-child td{border-bottom:none}
       <div id="ind-sk-tbl" style="overflow-x:auto"></div>
     </div>
   </div>
+
+  <!-- ── DEPÓSITOS ── -->
+  <div style="font-size:15px;font-weight:700;color:var(--text);margin:28px 0 14px;padding-top:10px;border-top:1px solid var(--border)">Indicadores — Depósitos</div>
+  <div class="kg" id="ind-dep-kpis" style="margin-bottom:16px"></div>
+  <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:14px;margin-bottom:16px">
+    <div class="card">
+      <div class="ch"><div class="ct">Por Analista</div><div class="cs">feitos vs pendentes por categoria</div></div>
+      <div style="height:260px;position:relative"><canvas id="ind-dep-ger-chart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="ch"><div class="ct">Por Categoria</div><div class="cs">2 dias · 3 dias · +3 dias</div></div>
+      <div style="height:260px;position:relative"><canvas id="ind-dep-cat-chart"></canvas></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="ch"><div class="ct">Detalhamento por Analista</div><div class="cs">feitos / total · pendentes · taxa por categoria</div></div>
+    <div id="ind-dep-tbl" style="overflow-x:auto"></div>
+  </div>
 </div>
 </main>
 
@@ -3983,6 +4001,8 @@ let _indChartGer = null;
 let _indChartEvo = null;
 let _indChartSkGer = null;
 let _indChartSkEvo = null;
+let _indChartDepGer = null;
+let _indChartDepCat = null;
 
 async function _gsGet(sheetName) {
   try {
@@ -4449,6 +4469,163 @@ function _buildIndSaques() {
   if(analistas.filter(a=>totalByAn[a]>0).length===0){tbl+=`<tr><td colspan="4" style="text-align:center;padding:40px;color:var(--text3)">Nenhum dado encontrado</td></tr>`;}
   tbl+='</tbody></table>';
   document.getElementById('ind-sk-tbl').innerHTML=tbl;
+  _buildIndDep();
+}
+
+function _buildIndDep() {
+  const CATS = ['2 dias','3 dias','+3 dias'];
+  const CAT_COLORS = {'2 dias':'#2563eb','3 dias':'#f59e0b','+3 dias':'#ef4444'};
+
+  const _sess = _indGetSession();
+  const _isAdm = _sess.role === 'admin';
+  const gerF = _isAdm ? _indGerFilter : (_sess.name || '');
+
+  const clFilt = (CL||[]).filter(c => !gerF || c.analista === gerF);
+
+  const analistas = gerF ? [gerF] : [...new Set(clFilt.map(c=>c.analista))].filter(Boolean).sort();
+
+  // Estrutura: {analista: {cat: {total, feito}}}
+  const byAnCat = {};
+  analistas.forEach(a => {
+    byAnCat[a] = {};
+    CATS.forEach(cat => { byAnCat[a][cat] = {total:0, feito:0}; });
+  });
+  clFilt.forEach(c => {
+    const a = c.analista || 'N/A';
+    const cat = c.categoria;
+    if (!byAnCat[a] || !byAnCat[a][cat]) return;
+    byAnCat[a][cat].total++;
+    if (DEP_CONTACTS[String(c.external_id)] && DEP_CONTACTS[String(c.external_id)].feito) {
+      byAnCat[a][cat].feito++;
+    }
+  });
+
+  // Totais por categoria (para KPIs)
+  const totCat = {};
+  CATS.forEach(cat => {
+    totCat[cat] = {total:0, feito:0};
+    analistas.forEach(a => {
+      totCat[cat].total += byAnCat[a][cat].total;
+      totCat[cat].feito += byAnCat[a][cat].feito;
+    });
+  });
+
+  const totalGeral = CATS.reduce((s,cat)=>s+totCat[cat].total, 0);
+  const feitoGeral = CATS.reduce((s,cat)=>s+totCat[cat].feito, 0);
+  const pendGeral  = Math.max(0, totalGeral - feitoGeral);
+  const taxaGeral  = totalGeral > 0 ? Math.round(feitoGeral/totalGeral*100) : 0;
+
+  // KPIs
+  const kpis = document.getElementById('ind-dep-kpis');
+  if (kpis) {
+    kpis.innerHTML =
+      `<div class="kc tl"><div class="kl">Total de Clientes</div><div class="kv">${totalGeral}</div><div class="kf">${feitoGeral} contatados</div></div>`+
+      `<div class="kc gn"><div class="kl">Taxa de Contato</div><div class="kv">${taxaGeral}%</div><div class="kf">de ${totalGeral} clientes</div></div>`+
+      `<div class="kc rd"><div class="kl">Pendentes</div><div class="kv">${pendGeral}</div><div class="kf">checklist desmarcado</div></div>`+
+      CATS.map(cat=>{
+        const c=totCat[cat];
+        const tx=c.total>0?Math.round(c.feito/c.total*100):0;
+        const clr=CAT_COLORS[cat];
+        return `<div class="kc" style="border-left:3px solid ${clr}"><div class="kl" style="color:${clr}">${cat}</div><div class="kv">${c.feito}/${c.total}</div><div class="kf">${tx}% contatados</div></div>`;
+      }).join('');
+  }
+
+  // Gráfico por analista (barras horizontais empilhadas: feitos vs pendentes por categoria)
+  const ctxGer = document.getElementById('ind-dep-ger-chart');
+  if (_indChartDepGer) { _indChartDepGer.destroy(); _indChartDepGer = null; }
+  if (ctxGer) {
+    const anF = analistas.filter(a => CATS.some(cat=>byAnCat[a][cat].total>0));
+    const datasets = CATS.flatMap(cat => [
+      {
+        label: cat+' (feitos)',
+        data: anF.map(a=>byAnCat[a][cat].feito),
+        backgroundColor: CAT_COLORS[cat],
+        borderRadius: 3,
+        stack: 'feito'
+      },
+      {
+        label: cat+' (pend.)',
+        data: anF.map(a=>Math.max(0,byAnCat[a][cat].total-byAnCat[a][cat].feito)),
+        backgroundColor: CAT_COLORS[cat]+'55',
+        borderRadius: 3,
+        stack: 'pend'
+      }
+    ]);
+    _indChartDepGer = new Chart(ctxGer, {
+      type:'bar',
+      data:{labels:anF, datasets},
+      options:{
+        indexAxis:'y', responsive:true, maintainAspectRatio:false,
+        plugins:{legend:{labels:{color:'#7c8fa8',font:{size:10},boxWidth:8}}},
+        scales:{
+          x:{stacked:true,beginAtZero:true,grid:{color:'#252a3d'},ticks:{color:'#7c8fa8',font:{size:10}}},
+          y:{stacked:true,grid:{color:'#252a3d'},ticks:{color:'#7c8fa8',font:{size:10}}}
+        }
+      }
+    });
+  }
+
+  // Gráfico por categoria (barras verticais: total, feitos, pendentes)
+  const ctxCat = document.getElementById('ind-dep-cat-chart');
+  if (_indChartDepCat) { _indChartDepCat.destroy(); _indChartDepCat = null; }
+  if (ctxCat) {
+    _indChartDepCat = new Chart(ctxCat, {
+      type:'bar',
+      data:{
+        labels: CATS,
+        datasets:[
+          {label:'Contatados', data:CATS.map(cat=>totCat[cat].feito), backgroundColor:CATS.map(c=>CAT_COLORS[c]), borderRadius:5},
+          {label:'Pendentes',  data:CATS.map(cat=>Math.max(0,totCat[cat].total-totCat[cat].feito)), backgroundColor:CATS.map(c=>CAT_COLORS[c]+'55'), borderRadius:5}
+        ]
+      },
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        plugins:{legend:{labels:{color:'#7c8fa8',font:{size:11},boxWidth:10}}},
+        scales:{
+          x:{stacked:true,grid:{color:'#252a3d'},ticks:{color:'#7c8fa8',font:{size:11}}},
+          y:{stacked:true,beginAtZero:true,grid:{color:'#252a3d'},ticks:{color:'#7c8fa8',font:{size:10}}}
+        }
+      }
+    });
+  }
+
+  // Tabela por analista × categoria
+  const tblEl = document.getElementById('ind-dep-tbl');
+  if (tblEl) {
+    let tbl='<table style="width:100%;border-collapse:collapse;font-size:12px">';
+    tbl+='<thead><tr style="border-bottom:1px solid var(--border)">';
+    tbl+='<th style="text-align:left;padding:9px 12px;color:var(--text3);font-weight:600">Analista</th>';
+    CATS.forEach(cat=>{
+      tbl+=`<th colspan="2" style="text-align:center;padding:9px 12px;color:${CAT_COLORS[cat]};font-weight:600">${cat}</th>`;
+    });
+    tbl+='<th style="text-align:center;padding:9px 12px;color:var(--text3);font-weight:600">Taxa Geral</th>';
+    tbl+='</tr>';
+    tbl+='<tr style="border-bottom:1px solid var(--border)">';
+    tbl+='<th></th>';
+    CATS.forEach(()=>{ tbl+='<th style="text-align:center;padding:4px 8px;color:var(--text3);font-size:10px">Feitos/Tot</th><th style="text-align:center;padding:4px 8px;color:var(--text3);font-size:10px">Pend.</th>'; });
+    tbl+='<th></th></tr></thead><tbody>';
+    analistas.filter(a=>CATS.some(cat=>byAnCat[a][cat].total>0)).forEach(a=>{
+      const totA = CATS.reduce((s,cat)=>s+byAnCat[a][cat].total,0);
+      const feiA = CATS.reduce((s,cat)=>s+byAnCat[a][cat].feito,0);
+      const txA  = totA>0?Math.round(feiA/totA*100):0;
+      const txColor=txA>=80?'var(--ok)':txA>=50?'var(--meta)':txA>0?'var(--crit)':'var(--text3)';
+      tbl+='<tr style="border-bottom:1px solid var(--border)">';
+      tbl+=`<td style="padding:9px 12px;color:var(--text);font-weight:500">${a}</td>`;
+      CATS.forEach(cat=>{
+        const d=byAnCat[a][cat];
+        const pend=Math.max(0,d.total-d.feito);
+        tbl+=`<td style="text-align:center;padding:9px 8px;color:var(--teal)">${d.feito}/${d.total}</td>`;
+        tbl+=`<td style="text-align:center;padding:9px 8px;color:${pend>0?'var(--crit)':'var(--text3)'};font-weight:${pend>0?700:400}">${pend}</td>`;
+      });
+      tbl+=`<td style="text-align:center;padding:9px 12px;font-weight:700;color:${txColor}">${totA>0?txA+'%':'—'}</td>`;
+      tbl+='</tr>';
+    });
+    if(analistas.filter(a=>CATS.some(cat=>byAnCat[a][cat].total>0)).length===0){
+      tbl+=`<tr><td colspan="${1+CATS.length*2+1}" style="text-align:center;padding:40px;color:var(--text3)">Nenhum dado encontrado</td></tr>`;
+    }
+    tbl+='</tbody></table>';
+    tblEl.innerHTML = tbl;
+  }
 }
 
 function _indSetGer(v) { _indGerFilter = v; _indBuild(); }
