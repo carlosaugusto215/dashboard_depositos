@@ -3162,7 +3162,7 @@ function renderSKContatoKPI() {
   const el = document.getElementById('sk-contato-kpi');
   if (!el) return;
   const gAn = (document.getElementById('g-an')||{}).value || '';
-  const all = (SK||[]).filter(r => r.valor >= 49000 && (!gAn || r.analista === gAn));
+  const all = (SK||[]).filter(r => r.mes === curMm && r.valor >= 49000 && (!gAn || r.analista === gAn));
   const byAn = {};
   all.forEach(r => {
     if (!byAn[r.analista]) byAn[r.analista] = {total:0, feito:0};
@@ -4370,17 +4370,14 @@ function _buildIndSaques() {
   const _isAdm = _sess.role === 'admin';
   const gerF = _isAdm ? _indGerFilter : (_sess.name || '');
 
-  // Filtra SK: apenas saques >= 49k + faixa de dias (se selecionada) + analista
+  // Filtra SK: mês corrente + saques >= 49k + faixa de dias (se selecionada) + analista
   const skFilt = (SK||[]).filter(r => {
+    if (r.mes !== curMm) return false;
     if (r.valor < 49000) return false;
-    if (fromDate && fromMo !== null) {
-      if (r.mes !== fromMo) return false;
-      if (fromDay !== null && r.dia < fromDay) return false;
-    }
-    if (toDate && toMo !== null) {
-      if (r.mes !== toMo) return false;
-      if (toDay !== null && r.dia > toDay) return false;
-    }
+    if (fromMo !== null && fromMo !== curMm) return false;
+    if (toMo   !== null && toMo   !== curMm) return false;
+    if (fromDay !== null && r.dia < fromDay) return false;
+    if (toDay   !== null && r.dia > toDay)   return false;
     if (gerF && r.analista !== gerF) return false;
     return true;
   });
