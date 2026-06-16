@@ -4154,6 +4154,11 @@ async function renderIndicadores() {
   if (btn) btn.disabled = false;
   // Sincroniza dados do Sheets → CH_CONTACTS para que o Chamados reflita o estado real
   _syncChFromSheets(_indRaw.Chamados);
+  // Sincroniza demais seções de contato em paralelo (saques, cashback, torneios, grandesperdas)
+  // Garante que contatos marcados por qualquer gerente apareçam para todos
+  [['Saques','saques'],['CashBack','cashback'],['Torneios','torneios'],['GrandesPerdas','grandesperdas']].forEach(([sh,sec])=>{
+    _gsGet(sh).then(d=>{if(d&&d.length)_syncContactSectionFromSheets(d,sec);}).catch(()=>{});
+  });
   // Atualiza título conforme papel do usuário
   const _s2 = _indGetSession();
   const titleEl = document.getElementById('ind-title');
@@ -4183,6 +4188,24 @@ function _syncChFromSheets(sheetsData) {
     if (typeof renderChContatoKPI === 'function') renderChContatoKPI();
     if (typeof renderChTbl === 'function') renderChTbl();
   }
+}
+
+// Sincroniza seções de CONTACTS (saques, cashback, torneios, grandesperdas) a partir do Sheets.
+// Usa client_id como chave (análogo ao ticket_id do _syncChFromSheets).
+// Garante que feito=TRUE no Sheets é a fonte de verdade sem sobrescrever marcações locais mais recentes.
+function _syncContactSectionFromSheets(sheetsData, section) {
+  if (!Array.isArray(sheetsData) || sheetsData.length === 0) return;
+  if (!CONTACTS[section]) CONTACTS[section] = {};
+  let changed = false;
+  sheetsData.forEach(r => {
+    const feito = r.feito===true||r.feito==='TRUE'||r.feito==='true';
+    const id = String(r.client_id||''); if(!id) return;
+    if (feito && !CONTACTS[section][id]?.feito) {
+      CONTACTS[section][id] = {feito:true, data:String(r.data_contato||''), obs:String(r.observacao||'')};
+      changed = true;
+    }
+  });
+  if (changed) { _saveContacts(); _contactRerender(section); }
 }
 
 // Parser robusto de datas — suporta dd/mm/yyyy, yyyy-mm-dd e strings nativas do Sheets
