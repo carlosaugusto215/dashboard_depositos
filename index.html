@@ -1088,7 +1088,7 @@ tr:last-child td{border-bottom:none}
   <div class="card" style="margin-bottom:16px">
     <div class="ch">
       <div class="ct">Ranking Geral</div>
-      <div class="cs">total de contatos feitos no mês por gerente · Depósitos (2d / 3d / +3d) · Saques · Chamados</div>
+      <div class="cs">total de contatos feitos no mês por gerente · Depósitos (2d / 3d / +3d) · Saques · Chamados · Cashback · Torneios · Gdes Perdas</div>
     </div>
     <div id="ranking-tbl" style="overflow-x:auto"></div>
   </div>
@@ -1097,7 +1097,7 @@ tr:last-child td{border-bottom:none}
   <div class="card">
     <div class="ch">
       <div class="ct">Contatos por Dia</div>
-      <div class="cs">quantidade de contatos por dia e categoria — <span style="color:#4f9dff">dep</span> depósitos · <span style="color:#10b981">sk</span> saques · <span style="color:#a78bfa">ch</span> chamados</div>
+      <div class="cs">quantidade de contatos por dia e categoria — <span style="color:#4f9dff">dep</span> depósitos · <span style="color:#10b981">sk</span> saques · <span style="color:#a78bfa">ch</span> chamados · <span style="color:#f97316">cb</span> cashback · <span style="color:#8b5cf6">tn</span> torneios · <span style="color:#f43f5e">gp</span> gdes perdas</div>
     </div>
     <div id="ranking-dia-tbl" style="overflow-x:auto"></div>
   </div>
@@ -4920,18 +4920,21 @@ function renderRanking() {
   const allAn = [...new Set([
     ...(CL||[]).map(c=>c.analista),
     ...(SK||[]).filter(r=>r.mes===curMm&&r.valor>=49000).map(r=>r.analista),
-    ...(CH||[]).map(c=>c.gerente)
+    ...(CH||[]).map(c=>c.gerente),
+    ...(CB||[]).map(r=>r.analista),
+    ...(TN||[]).map(r=>r.analista),
+    ...(GP||[]).map(r=>r.analista)
   ])].filter(Boolean).sort();
 
   const analistas = gerF ? [gerF] : allAn;
 
   const D = {};
   analistas.forEach(a => {
-    D[a] = { dep:{'2 dias':0,'3 dias':0,'+3 dias':0}, saques:0, chamados:0, byDay:{}, total:0 };
+    D[a] = { dep:{'2 dias':0,'3 dias':0,'+3 dias':0}, saques:0, chamados:0, cashback:0, torneios:0, grandesperdas:0, byDay:{}, total:0 };
   });
 
   const ensDay = (a, day) => {
-    if(!D[a].byDay[day]) D[a].byDay[day]={dep_2:0,dep_3:0,dep_3p:0,saq:0,ch:0};
+    if(!D[a].byDay[day]) D[a].byDay[day]={dep_2:0,dep_3:0,dep_3p:0,saq:0,ch:0,cb:0,tn:0,gp:0};
   };
 
   // Depósitos — igual _buildIndDep(): todos CL, DEP_CONTACTS[id].feito (sem filtro de data)
@@ -4964,10 +4967,52 @@ function renderRanking() {
     if(day){ensDay(a,day);D[a].byDay[day].ch++;}
   });
 
+  // Cashback — CB array, clientes únicos contatados
+  const _cbVisto=new Set();
+  (CB||[]).forEach(r => {
+    const a=r.analista; if(!D[a]) return;
+    const sid=String(r.external_id);
+    if(_cbVisto.has(sid)) return;
+    const ct=_getContact('cashback',sid);
+    if(!ct.feito) return;
+    _cbVisto.add(sid);
+    D[a].cashback++;
+    const day=parseDay(ct.data);
+    if(day){ensDay(a,day);D[a].byDay[day].cb++;}
+  });
+
+  // Torneios — TN array, clientes únicos contatados (todos os torneios)
+  const _tnVisto=new Set();
+  (TN||[]).forEach(r => {
+    const a=r.analista; if(!D[a]) return;
+    const sid=String(r.external_id);
+    if(_tnVisto.has(sid)) return;
+    const ct=_getContact('torneios',sid);
+    if(!ct.feito) return;
+    _tnVisto.add(sid);
+    D[a].torneios++;
+    const day=parseDay(ct.data);
+    if(day){ensDay(a,day);D[a].byDay[day].tn++;}
+  });
+
+  // Grandes Perdas — GP array, clientes únicos contatados
+  const _gpVisto=new Set();
+  (GP||[]).forEach(r => {
+    const a=r.analista; if(!D[a]) return;
+    const sid=String(r.external_id);
+    if(_gpVisto.has(sid)) return;
+    const ct=_getContact('grandesperdas',sid);
+    if(!ct.feito) return;
+    _gpVisto.add(sid);
+    D[a].grandesperdas++;
+    const day=parseDay(ct.data);
+    if(day){ensDay(a,day);D[a].byDay[day].gp++;}
+  });
+
   // Totais
   analistas.forEach(a => {
     const d=D[a];
-    d.total=(d.dep['2 dias']||0)+(d.dep['3 dias']||0)+(d.dep['+3 dias']||0)+d.saques+d.chamados;
+    d.total=(d.dep['2 dias']||0)+(d.dep['3 dias']||0)+(d.dep['+3 dias']||0)+d.saques+d.chamados+d.cashback+d.torneios+d.grandesperdas;
   });
 
   const sorted = analistas.sort((a,b)=>D[b].total-D[a].total);
@@ -4983,6 +5028,9 @@ function renderRanking() {
   tbl+='<th style="text-align:center;padding:10px 6px;color:#ef4444;font-weight:600">+3 dias</th>';
   tbl+='<th style="text-align:center;padding:10px 6px;color:#10b981;font-weight:600">Saques</th>';
   tbl+='<th style="text-align:center;padding:10px 6px;color:#a78bfa;font-weight:600">Chamados</th>';
+  tbl+='<th style="text-align:center;padding:10px 6px;color:#f97316;font-weight:600">Cashback</th>';
+  tbl+='<th style="text-align:center;padding:10px 6px;color:#8b5cf6;font-weight:600">Torneios</th>';
+  tbl+='<th style="text-align:center;padding:10px 6px;color:#f43f5e;font-weight:600">G. Perdas</th>';
   tbl+='<th style="text-align:center;padding:10px 12px;color:var(--teal);font-weight:700">Total</th>';
   tbl+='</tr></thead><tbody>';
 
@@ -4997,12 +5045,15 @@ function renderRanking() {
     tbl+=`<td style="text-align:center;padding:10px 6px;color:#ef4444;font-weight:600">${d.dep['+3 dias']||0}</td>`;
     tbl+=`<td style="text-align:center;padding:10px 6px;color:#10b981">${d.saques}</td>`;
     tbl+=`<td style="text-align:center;padding:10px 6px;color:#a78bfa">${d.chamados}</td>`;
+    tbl+=`<td style="text-align:center;padding:10px 6px;color:#f97316">${d.cashback}</td>`;
+    tbl+=`<td style="text-align:center;padding:10px 6px;color:#8b5cf6">${d.torneios}</td>`;
+    tbl+=`<td style="text-align:center;padding:10px 6px;color:#f43f5e">${d.grandesperdas}</td>`;
     tbl+=`<td style="text-align:center;padding:10px 12px;color:var(--teal);font-weight:700;font-size:15px">${d.total}</td>`;
     tbl+='</tr>';
   });
 
   if(sorted.every(a=>D[a].total===0)){
-    tbl+=`<tr><td colspan="8" style="text-align:center;padding:48px;color:var(--text3)">Nenhum contato registrado no mês</td></tr>`;
+    tbl+=`<tr><td colspan="11" style="text-align:center;padding:48px;color:var(--text3)">Nenhum contato registrado no mês</td></tr>`;
   }
 
   // Linha de total geral
@@ -5012,6 +5063,9 @@ function renderRanking() {
     const tot3p=sorted.reduce((s,a)=>s+(D[a].dep['+3 dias']||0),0);
     const totSk=sorted.reduce((s,a)=>s+D[a].saques,0);
     const totCh=sorted.reduce((s,a)=>s+D[a].chamados,0);
+    const totCb=sorted.reduce((s,a)=>s+D[a].cashback,0);
+    const totTn=sorted.reduce((s,a)=>s+D[a].torneios,0);
+    const totGp=sorted.reduce((s,a)=>s+D[a].grandesperdas,0);
     const totG=sorted.reduce((s,a)=>s+D[a].total,0);
     tbl+=`<tr style="border-top:2px solid var(--border);background:rgba(0,229,192,.04)">`;
     tbl+=`<td colspan="2" style="padding:10px 12px;color:var(--teal);font-weight:700;font-size:12px">TOTAL GERAL</td>`;
@@ -5020,6 +5074,9 @@ function renderRanking() {
     tbl+=`<td style="text-align:center;padding:10px 6px;color:#ef4444;font-weight:700">${tot3p}</td>`;
     tbl+=`<td style="text-align:center;padding:10px 6px;color:#10b981;font-weight:700">${totSk}</td>`;
     tbl+=`<td style="text-align:center;padding:10px 6px;color:#a78bfa;font-weight:700">${totCh}</td>`;
+    tbl+=`<td style="text-align:center;padding:10px 6px;color:#f97316;font-weight:700">${totCb}</td>`;
+    tbl+=`<td style="text-align:center;padding:10px 6px;color:#8b5cf6;font-weight:700">${totTn}</td>`;
+    tbl+=`<td style="text-align:center;padding:10px 6px;color:#f43f5e;font-weight:700">${totGp}</td>`;
     tbl+=`<td style="text-align:center;padding:10px 12px;color:var(--teal);font-weight:700;font-size:15px">${totG}</td>`;
     tbl+='</tr>';
   }
@@ -5048,12 +5105,15 @@ function renderRanking() {
       if(!bd){
         t2+=`<td style="text-align:center;padding:8px 5px;color:var(--border)">·</td>`;
       } else {
-        const tot=bd.dep_2+bd.dep_3+bd.dep_3p+bd.saq+bd.ch;
+        const tot=bd.dep_2+bd.dep_3+bd.dep_3p+bd.saq+bd.ch+(bd.cb||0)+(bd.tn||0)+(bd.gp||0);
         const depT=bd.dep_2+bd.dep_3+bd.dep_3p;
         const parts=[];
         if(depT>0)parts.push(`<span style="color:#4f9dff;font-size:9px">${depT}dep</span>`);
         if(bd.saq>0)parts.push(`<span style="color:#10b981;font-size:9px">${bd.saq}sk</span>`);
         if(bd.ch>0)parts.push(`<span style="color:#a78bfa;font-size:9px">${bd.ch}ch</span>`);
+        if(bd.cb>0)parts.push(`<span style="color:#f97316;font-size:9px">${bd.cb}cb</span>`);
+        if(bd.tn>0)parts.push(`<span style="color:#8b5cf6;font-size:9px">${bd.tn}tn</span>`);
+        if(bd.gp>0)parts.push(`<span style="color:#f43f5e;font-size:9px">${bd.gp}gp</span>`);
         t2+=`<td style="text-align:center;padding:6px 5px;vertical-align:middle">`;
         t2+=`<div style="font-weight:700;font-size:13px;color:var(--text);line-height:1">${tot}</div>`;
         t2+=`<div style="margin-top:2px;display:flex;flex-direction:column;align-items:center;gap:1px">${parts.join('')}</div>`;
