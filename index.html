@@ -2017,11 +2017,11 @@ function goTo(id,el){
   document.getElementById('pg-'+id).classList.add('on');
   el.classList.add('on');
   document.getElementById('tb-pg').textContent={overview:'Depósitos',ativos:'Ativos Ontem',chamados:'Chamados',saques:'Saques',cashback:'CashBack',torneios:'Torneios',grandesperdas:'Grandes Perdas',carteira:'Carteira de Clientes',analistas:'Por Analista',clientes:'Clientes',tendencia:'Tendência',indicadores:'Indicadores',ranking:'Ranking de Contatos'}[id]||id;
-  if(id==='grandesperdas'){renderGrandesPerdas();}
+  if(id==='grandesperdas'){renderGrandesPerdas();_gsGetContacts('GrandesPerdas').then(d=>{if(d&&d.length)_syncContactSectionFromSheets(d,'grandesperdas');}).catch(()=>{});}
   if(id==='carteira'){renderCarteira();}
-  if(id==='torneios'){renderTorneios();}
-  if(id==='cashback'){renderCashback();}
-  if(id==='saques'){renderSaques();}
+  if(id==='torneios'){renderTorneios();_gsGetContacts('Torneios').then(d=>{if(d&&d.length)_syncContactSectionFromSheets(d,'torneios');}).catch(()=>{});}
+  if(id==='cashback'){renderCashback();_gsGetContacts('CashBack').then(d=>{if(d&&d.length)_syncContactSectionFromSheets(d,'cashback');}).catch(()=>{});}
+  if(id==='saques'){renderSaques();_gsGetContacts('Saques').then(d=>{if(d&&d.length)_syncContactSectionFromSheets(d,'saques');}).catch(()=>{});}
   if(id==='chamados'){renderChamados();loadChContacts();}
   if(id==='ativos'){renderYKPIs();renderYT();}
   if(id==='tendencia')renderTR();
