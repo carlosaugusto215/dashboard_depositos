@@ -2029,11 +2029,11 @@ function goTo(id,el){
   if(id==='indicadores'){_indShowSec(_indSection);if(Object.keys(_indRaw).length===0)renderIndicadores();else _indBuildActive();}
   if(id==='ranking'){
     renderRanking();
-    // Se CH_CONTACTS vazio, busca Chamados no Sheets em background (timeout 5s)
-    if(Object.keys(CH_CONTACTS).length===0){
-      const _t=new Promise((_,r)=>setTimeout(()=>r(),5000));
-      Promise.race([_gsGet('Chamados'),_t]).then(d=>{if(d&&d.length){_indRaw.Chamados=d;try{_syncChFromSheets(d);}catch(e){}renderRanking();}}).catch(()=>{});
-    }
+    // Sincroniza todas as fontes de contato do Sheets em paralelo e re-renderiza ao completar cada uma
+    _gsGet('Chamados').then(d=>{if(d&&d.length){_indRaw.Chamados=d;try{_syncChFromSheets(d);}catch(e){}renderRanking();}}).catch(()=>{});
+    [['Saques','saques'],['CashBack','cashback'],['Torneios','torneios'],['GrandesPerdas','grandesperdas']].forEach(([sh,sec])=>{
+      _gsGet(sh).then(d=>{if(d&&d.length){_syncContactSectionFromSheets(d,sec);renderRanking();}}).catch(()=>{});
+    });
   }
 }
 
