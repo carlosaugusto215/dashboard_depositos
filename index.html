@@ -1070,6 +1070,7 @@ tr:last-child td{border-bottom:none}
     </div>
 
   </div>
+</div>
 
 <!-- RANKING -->
 <div class="pg" id="pg-ranking">
@@ -2026,7 +2027,14 @@ function goTo(id,el){
   if(id==='tendencia')renderTR();
   if(id==='analistas')renderAN();
   if(id==='indicadores'){_indShowSec(_indSection);if(Object.keys(_indRaw).length===0)renderIndicadores();else _indBuildActive();}
-  if(id==='ranking')renderRanking();
+  if(id==='ranking'){
+    renderRanking();
+    // Se CH_CONTACTS vazio, busca Chamados no Sheets em background (timeout 5s)
+    if(Object.keys(CH_CONTACTS).length===0){
+      const _t=new Promise((_,r)=>setTimeout(()=>r(),5000));
+      Promise.race([_gsGet('Chamados'),_t]).then(d=>{if(d&&d.length){_indRaw.Chamados=d;try{_syncChFromSheets(d);}catch(e){}renderRanking();}}).catch(()=>{});
+    }
+  }
 }
 
 /* IMPORT EXCEL */
@@ -4889,6 +4897,18 @@ function _buildIndGrandesPerdas(){
 }
 
 function renderRanking() {
+  // Recarrega contatos do localStorage com guards contra null/invalid
+  try{const d=localStorage.getItem('dep_contacts');const p=d?JSON.parse(d):null;if(p&&typeof p==='object'&&!Array.isArray(p))DEP_CONTACTS=p;}catch(e){}
+  try{const c=localStorage.getItem('contacts_v2');const p=c?JSON.parse(c):null;if(p&&typeof p==='object'&&!Array.isArray(p))CONTACTS=p;}catch(e){}
+  try{const h=localStorage.getItem('ch_contacts');const p=h?JSON.parse(h):null;if(p&&typeof p==='object'&&!Array.isArray(p))CH_CONTACTS=p;}catch(e){}
+  // Garante que as variáveis são sempre objetos válidos
+  if(!DEP_CONTACTS||typeof DEP_CONTACTS!=='object')DEP_CONTACTS={};
+  if(!CONTACTS||typeof CONTACTS!=='object')CONTACTS={};
+  if(!CH_CONTACTS||typeof CH_CONTACTS!=='object')CH_CONTACTS={};
+
+  try {
+  // Se Sheets já foi buscado, sincroniza CH_CONTACTS (dentro do try para não silenciar erro)
+  if(_indRaw&&_indRaw.Chamados)_syncChFromSheets(_indRaw.Chamados);
   const _sess = _indGetSession();
   const _isAdm = _sess.role === 'admin';
   const gerF = _isAdm ? '' : (_sess.name || '');
@@ -5049,6 +5069,11 @@ function renderRanking() {
   }
   t2+='</tbody></table>';
   document.getElementById('ranking-dia-tbl').innerHTML=t2;
+  } catch(e) {
+    const tbl=document.getElementById('ranking-tbl');
+    if(tbl)tbl.innerHTML=`<div style="padding:24px;color:#ef4444;font-size:13px">Erro ao carregar ranking: ${e.message}. Acesse Indicadores → Chamados e clique Atualizar, depois volte ao Ranking.</div>`;
+    console.error('[RANKING]',e);
+  }
 }
 
 function _indSetGer(v) { _indGerFilter = v; _indBuild(); }
