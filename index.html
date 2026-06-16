@@ -4673,11 +4673,12 @@ function renderRanking() {
   // Parse month from contact date
   const parseMo  = s => { if(!s) return null; const p=s.split('/'); return p.length>=2?parseInt(p[1]):null; };
 
-  // Collect all analistas from all data sources (current month)
+  // Collect all analistas from all data sources
+  // CH.mes é string "junho" ou ausente nos imports recentes — não filtrar por mês aqui
   const allAn = [...new Set([
     ...(CL||[]).map(c=>c.analista),
     ...(SK||[]).filter(r=>r.mes===curMm&&r.valor>=49000).map(r=>r.analista),
-    ...(CH||[]).filter(c=>parseInt(c.mes)===curMm).map(c=>c.gerente)
+    ...(CH||[]).map(c=>c.gerente)
   ])].filter(Boolean).sort();
 
   const analistas = gerF ? (allAn.includes(gerF)?[gerF]:[gerF]) : allAn;
@@ -4716,8 +4717,8 @@ function renderRanking() {
     if(day){ensDay(a,day);D[a].byDay[day].saq++;}
   });
 
-  // Chamados — usa CH_CONTACTS
-  (CH||[]).filter(c=>parseInt(c.mes)===curMm).forEach(c => {
+  // Chamados — usa CH_CONTACTS (CH.mes é "junho" string ou ausente; não filtrar por mês)
+  (CH||[]).forEach(c => {
     const a = c.gerente; if(!D[a]) return;
     const ct = CH_CONTACTS[String(c.ticket_id)];
     if(!ct||!ct.feito) return;
