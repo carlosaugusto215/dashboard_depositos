@@ -313,6 +313,9 @@ tr:last-child td{border-bottom:none}
     <div class="ni" onclick="goTo('indicadores',this)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Indicadores
     </div>
+    <div class="ni" onclick="goTo('ranking',this)" style="padding-left:28px;font-size:12.5px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M8 21h8m-4-4v4M5 3h14l-1 7a6 6 0 01-12 0L5 3z"/><path d="M4 3H3m18 0h-1"/></svg>Ranking de Contatos
+    </div>
   </nav>
   <div class="sb-ft">
     <button class="imp-btn" onclick="document.getElementById('finp').click()">
@@ -995,6 +998,37 @@ tr:last-child td{border-bottom:none}
   <div class="card">
     <div class="ch"><div class="ct">Detalhamento por Analista</div><div class="cs">feitos / total · pendentes · taxa por categoria</div></div>
     <div id="ind-dep-tbl" style="overflow-x:auto"></div>
+  </div>
+</div>
+
+<!-- RANKING -->
+<div class="pg" id="pg-ranking">
+  <div class="ph" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:20px">
+    <div>
+      <div style="font-size:18px;font-weight:700;color:var(--text)">Ranking de Contatos</div>
+      <div style="font-size:12px;color:var(--text3);margin-top:3px">Performance dos gerentes · mês atual</div>
+    </div>
+    <button onclick="renderRanking()" style="padding:7px 14px;border-radius:8px;background:var(--bg3);border:1px solid var(--border);color:var(--text2);cursor:pointer;font-size:12px;display:flex;align-items:center;gap:6px;transition:all .15s" onmouseover="this.style.borderColor='var(--teal)'" onmouseout="this.style.borderColor='var(--border)'">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>Atualizar
+    </button>
+  </div>
+
+  <!-- Ranking geral -->
+  <div class="card" style="margin-bottom:16px">
+    <div class="ch">
+      <div class="ct">Ranking Geral</div>
+      <div class="cs">total de contatos feitos no mês por gerente · Depósitos (2d / 3d / +3d) · Saques · Chamados</div>
+    </div>
+    <div id="ranking-tbl" style="overflow-x:auto"></div>
+  </div>
+
+  <!-- Contatos por dia -->
+  <div class="card">
+    <div class="ch">
+      <div class="ct">Contatos por Dia</div>
+      <div class="cs">quantidade de contatos por dia e categoria — <span style="color:#4f9dff">dep</span> depósitos · <span style="color:#10b981">sk</span> saques · <span style="color:#a78bfa">ch</span> chamados</div>
+    </div>
+    <div id="ranking-dia-tbl" style="overflow-x:auto"></div>
   </div>
 </div>
 </main>
@@ -1911,7 +1945,7 @@ function goTo(id,el){
   document.querySelectorAll('.ni').forEach(n=>n.classList.remove('on'));
   document.getElementById('pg-'+id).classList.add('on');
   el.classList.add('on');
-  document.getElementById('tb-pg').textContent={overview:'Depósitos',ativos:'Ativos Ontem',chamados:'Chamados',saques:'Saques',cashback:'CashBack',torneios:'Torneios',grandesperdas:'Grandes Perdas',carteira:'Carteira de Clientes',analistas:'Por Analista',clientes:'Clientes',tendencia:'Tendência',indicadores:'Indicadores'}[id];
+  document.getElementById('tb-pg').textContent={overview:'Depósitos',ativos:'Ativos Ontem',chamados:'Chamados',saques:'Saques',cashback:'CashBack',torneios:'Torneios',grandesperdas:'Grandes Perdas',carteira:'Carteira de Clientes',analistas:'Por Analista',clientes:'Clientes',tendencia:'Tendência',indicadores:'Indicadores',ranking:'Ranking de Contatos'}[id]||id;
   if(id==='grandesperdas'){renderGrandesPerdas();}
   if(id==='carteira'){renderCarteira();}
   if(id==='torneios'){renderTorneios();}
@@ -1922,6 +1956,7 @@ function goTo(id,el){
   if(id==='tendencia')renderTR();
   if(id==='analistas')renderAN();
   if(id==='indicadores'){if(Object.keys(_indRaw).length===0)renderIndicadores();else _buildInd();}
+  if(id==='ranking')renderRanking();
 }
 
 /* IMPORT EXCEL */
@@ -4626,6 +4661,178 @@ function _buildIndDep() {
     tbl+='</tbody></table>';
     tblEl.innerHTML = tbl;
   }
+}
+
+function renderRanking() {
+  const _sess = _indGetSession();
+  const _isAdm = _sess.role === 'admin';
+  const gerF = _isAdm ? '' : (_sess.name || '');
+
+  // Parse "DD/MM/YYYY HH:MM" → day number (int)
+  const parseDay = s => { if(!s) return null; const d=parseInt(s.split('/')[0]); return isNaN(d)?null:d; };
+  // Parse month from contact date
+  const parseMo  = s => { if(!s) return null; const p=s.split('/'); return p.length>=2?parseInt(p[1]):null; };
+
+  // Collect all analistas from all data sources (current month)
+  const allAn = [...new Set([
+    ...(CL||[]).map(c=>c.analista),
+    ...(SK||[]).filter(r=>r.mes===curMm&&r.valor>=49000).map(r=>r.analista),
+    ...(CH||[]).filter(c=>parseInt(c.mes)===curMm).map(c=>c.gerente)
+  ])].filter(Boolean).sort();
+
+  const analistas = gerF ? (allAn.includes(gerF)?[gerF]:[gerF]) : allAn;
+
+  // Build data per analista
+  const D = {};
+  analistas.forEach(a => {
+    D[a] = { dep:{'2 dias':0,'3 dias':0,'+3 dias':0}, saques:0, chamados:0, byDay:{}, total:0 };
+  });
+
+  const ensDay = (a, day) => {
+    if(!D[a].byDay[day]) D[a].byDay[day]={dep_2:0,dep_3:0,dep_3p:0,saq:0,ch:0};
+  };
+
+  // Depósitos — usa DEP_CONTACTS
+  (CL||[]).forEach(c => {
+    const a = c.analista; if(!D[a]) return;
+    const dc = DEP_CONTACTS[String(c.external_id)];
+    if(!dc||!dc.feito) return;
+    const mo = parseMo(dc.data);
+    if(mo!==null&&mo!==curMm) return;
+    D[a].dep[c.categoria]=(D[a].dep[c.categoria]||0)+1;
+    const day=parseDay(dc.data);
+    if(day){ensDay(a,day);const k=c.categoria==='2 dias'?'dep_2':c.categoria==='3 dias'?'dep_3':'dep_3p';D[a].byDay[day][k]++;}
+  });
+
+  // Saques — usa CONTACTS['saques']
+  (SK||[]).filter(r=>r.mes===curMm&&r.valor>=49000).forEach(r => {
+    const a = r.analista; if(!D[a]) return;
+    const ct = _getContact('saques', String(r.external_id));
+    if(!ct.feito) return;
+    const mo = parseMo(ct.data);
+    if(mo!==null&&mo!==curMm) return;
+    D[a].saques++;
+    const day=parseDay(ct.data);
+    if(day){ensDay(a,day);D[a].byDay[day].saq++;}
+  });
+
+  // Chamados — usa CH_CONTACTS
+  (CH||[]).filter(c=>parseInt(c.mes)===curMm).forEach(c => {
+    const a = c.gerente; if(!D[a]) return;
+    const ct = CH_CONTACTS[String(c.ticket_id)];
+    if(!ct||!ct.feito) return;
+    const mo = parseMo(ct.data);
+    if(mo!==null&&mo!==curMm) return;
+    D[a].chamados++;
+    const day=parseDay(ct.data);
+    if(day){ensDay(a,day);D[a].byDay[day].ch++;}
+  });
+
+  // Totais
+  analistas.forEach(a => {
+    const d=D[a];
+    d.total=(d.dep['2 dias']||0)+(d.dep['3 dias']||0)+(d.dep['+3 dias']||0)+d.saques+d.chamados;
+  });
+
+  const sorted = analistas.filter(a=>D[a].total>0).sort((a,b)=>D[b].total-D[a].total);
+
+  // ── Ranking table ──────────────────────────────────────────────
+  const medals = ['🥇','🥈','🥉'];
+  let tbl='<table style="width:100%;border-collapse:collapse;font-size:12px">';
+  tbl+='<thead><tr style="border-bottom:2px solid var(--border)">';
+  tbl+='<th style="text-align:center;padding:10px 8px;color:var(--text3);font-weight:600;width:44px">#</th>';
+  tbl+='<th style="text-align:left;padding:10px 12px;color:var(--text3);font-weight:600">Gerente</th>';
+  tbl+='<th style="text-align:center;padding:10px 6px;color:#2563eb;font-weight:600">2 dias</th>';
+  tbl+='<th style="text-align:center;padding:10px 6px;color:#f59e0b;font-weight:600">3 dias</th>';
+  tbl+='<th style="text-align:center;padding:10px 6px;color:#ef4444;font-weight:600">+3 dias</th>';
+  tbl+='<th style="text-align:center;padding:10px 6px;color:#10b981;font-weight:600">Saques</th>';
+  tbl+='<th style="text-align:center;padding:10px 6px;color:#a78bfa;font-weight:600">Chamados</th>';
+  tbl+='<th style="text-align:center;padding:10px 12px;color:var(--teal);font-weight:700">Total</th>';
+  tbl+='</tr></thead><tbody>';
+
+  sorted.forEach((a,i) => {
+    const d=D[a];
+    const bg=i===0?'rgba(255,215,0,.06)':i===1?'rgba(192,192,192,.05)':i===2?'rgba(205,127,50,.05)':'';
+    tbl+=`<tr style="border-bottom:1px solid var(--border);background:${bg}">`;
+    tbl+=`<td style="text-align:center;padding:10px 8px;font-size:${i<3?'18':'12'}px;line-height:1">${medals[i]||String(i+1)}</td>`;
+    tbl+=`<td style="padding:10px 12px;color:var(--text);font-weight:${i===0?700:500}">${a}</td>`;
+    tbl+=`<td style="text-align:center;padding:10px 6px;color:#2563eb;font-weight:600">${d.dep['2 dias']||0}</td>`;
+    tbl+=`<td style="text-align:center;padding:10px 6px;color:#f59e0b;font-weight:600">${d.dep['3 dias']||0}</td>`;
+    tbl+=`<td style="text-align:center;padding:10px 6px;color:#ef4444;font-weight:600">${d.dep['+3 dias']||0}</td>`;
+    tbl+=`<td style="text-align:center;padding:10px 6px;color:#10b981">${d.saques}</td>`;
+    tbl+=`<td style="text-align:center;padding:10px 6px;color:#a78bfa">${d.chamados}</td>`;
+    tbl+=`<td style="text-align:center;padding:10px 12px;color:var(--teal);font-weight:700;font-size:15px">${d.total}</td>`;
+    tbl+='</tr>';
+  });
+
+  if(sorted.length===0){
+    tbl+=`<tr><td colspan="8" style="text-align:center;padding:48px;color:var(--text3)">Nenhum contato registrado no mês</td></tr>`;
+  }
+
+  // Linha de total geral
+  if(sorted.length>1){
+    const tot2=sorted.reduce((s,a)=>s+(D[a].dep['2 dias']||0),0);
+    const tot3=sorted.reduce((s,a)=>s+(D[a].dep['3 dias']||0),0);
+    const tot3p=sorted.reduce((s,a)=>s+(D[a].dep['+3 dias']||0),0);
+    const totSk=sorted.reduce((s,a)=>s+D[a].saques,0);
+    const totCh=sorted.reduce((s,a)=>s+D[a].chamados,0);
+    const totG=sorted.reduce((s,a)=>s+D[a].total,0);
+    tbl+=`<tr style="border-top:2px solid var(--border);background:rgba(0,229,192,.04)">`;
+    tbl+=`<td colspan="2" style="padding:10px 12px;color:var(--teal);font-weight:700;font-size:12px">TOTAL GERAL</td>`;
+    tbl+=`<td style="text-align:center;padding:10px 6px;color:#2563eb;font-weight:700">${tot2}</td>`;
+    tbl+=`<td style="text-align:center;padding:10px 6px;color:#f59e0b;font-weight:700">${tot3}</td>`;
+    tbl+=`<td style="text-align:center;padding:10px 6px;color:#ef4444;font-weight:700">${tot3p}</td>`;
+    tbl+=`<td style="text-align:center;padding:10px 6px;color:#10b981;font-weight:700">${totSk}</td>`;
+    tbl+=`<td style="text-align:center;padding:10px 6px;color:#a78bfa;font-weight:700">${totCh}</td>`;
+    tbl+=`<td style="text-align:center;padding:10px 12px;color:var(--teal);font-weight:700;font-size:15px">${totG}</td>`;
+    tbl+='</tr>';
+  }
+  tbl+='</tbody></table>';
+  document.getElementById('ranking-tbl').innerHTML=tbl;
+
+  // ── Por Dia table ──────────────────────────────────────────────
+  const allDays=[...new Set(sorted.flatMap(a=>Object.keys(D[a].byDay).map(Number)))].sort((a,b)=>a-b);
+
+  let t2='<table style="width:100%;border-collapse:collapse;font-size:11px">';
+  t2+='<thead><tr style="border-bottom:2px solid var(--border)">';
+  t2+=`<th style="text-align:left;padding:8px 12px;color:var(--text3);font-weight:600;white-space:nowrap;position:sticky;left:0;background:var(--bg2)">Gerente</th>`;
+  allDays.forEach(day=>{
+    t2+=`<th style="text-align:center;padding:8px 5px;color:var(--text3);font-weight:600;min-width:38px">Dia ${day}</th>`;
+  });
+  t2+=`<th style="text-align:center;padding:8px 12px;color:var(--teal);font-weight:700;white-space:nowrap">Total mês</th>`;
+  t2+='</tr></thead><tbody>';
+
+  sorted.forEach((a,i) => {
+    const d=D[a];
+    const bg=i===0?'rgba(255,215,0,.04)':i===1?'rgba(192,192,192,.03)':i===2?'rgba(205,127,50,.03)':'';
+    t2+=`<tr style="border-bottom:1px solid var(--border);background:${bg}">`;
+    t2+=`<td style="padding:8px 12px;color:var(--text);font-weight:${i===0?700:500};white-space:nowrap;position:sticky;left:0;background:${bg||'var(--bg2)'}">${medals[i]||''} ${a}</td>`;
+    allDays.forEach(day=>{
+      const bd=d.byDay[day];
+      if(!bd){
+        t2+=`<td style="text-align:center;padding:8px 5px;color:var(--border)">·</td>`;
+      } else {
+        const tot=bd.dep_2+bd.dep_3+bd.dep_3p+bd.saq+bd.ch;
+        const depT=bd.dep_2+bd.dep_3+bd.dep_3p;
+        const parts=[];
+        if(depT>0)parts.push(`<span style="color:#4f9dff;font-size:9px">${depT}dep</span>`);
+        if(bd.saq>0)parts.push(`<span style="color:#10b981;font-size:9px">${bd.saq}sk</span>`);
+        if(bd.ch>0)parts.push(`<span style="color:#a78bfa;font-size:9px">${bd.ch}ch</span>`);
+        t2+=`<td style="text-align:center;padding:6px 5px;vertical-align:middle">`;
+        t2+=`<div style="font-weight:700;font-size:13px;color:var(--text);line-height:1">${tot}</div>`;
+        t2+=`<div style="margin-top:2px;display:flex;flex-direction:column;align-items:center;gap:1px">${parts.join('')}</div>`;
+        t2+=`</td>`;
+      }
+    });
+    t2+=`<td style="text-align:center;padding:8px 12px;color:var(--teal);font-weight:700;font-size:14px">${d.total}</td>`;
+    t2+='</tr>';
+  });
+
+  if(sorted.length===0){
+    t2+=`<tr><td colspan="${2+allDays.length}" style="text-align:center;padding:40px;color:var(--text3)">Nenhum dado disponível</td></tr>`;
+  }
+  t2+='</tbody></table>';
+  document.getElementById('ranking-dia-tbl').innerHTML=t2;
 }
 
 function _indSetGer(v) { _indGerFilter = v; _indBuild(); }
