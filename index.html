@@ -3162,7 +3162,7 @@ function renderSKContatoKPI() {
   const el = document.getElementById('sk-contato-kpi');
   if (!el) return;
   const gAn = (document.getElementById('g-an')||{}).value || '';
-  const all = (SK||[]).filter(r => r.mes === curMm && r.valor >= 49000 && (!gAn || r.analista === gAn));
+  const all = (SK||[]).filter(r => r.valor >= 49000 && (!gAn || r.analista === gAn));
   const byAn = {};
   all.forEach(r => {
     if (!byAn[r.analista]) byAn[r.analista] = {total:0, feito:0};
@@ -4370,40 +4370,33 @@ function _buildIndSaques() {
   const _isAdm = _sess.role === 'admin';
   const gerF = _isAdm ? _indGerFilter : (_sess.name || '');
 
-  // Filtra SK: mês corrente + faixa de dias + analista + apenas saques >= 49k
+  // Filtra SK: apenas saques >= 49k + faixa de dias (se selecionada) + analista
   const skFilt = (SK||[]).filter(r => {
-    if (r.mes !== curMm) return false;
     if (r.valor < 49000) return false;
-    if (fromMo !== null && fromMo !== curMm) return false;
-    if (toMo   !== null && toMo   !== curMm) return false;
-    if (fromDay !== null && r.dia < fromDay) return false;
-    if (toDay   !== null && r.dia > toDay)   return false;
+    if (fromDate && fromMo !== null) {
+      if (r.mes !== fromMo) return false;
+      if (fromDay !== null && r.dia < fromDay) return false;
+    }
+    if (toDate && toMo !== null) {
+      if (r.mes !== toMo) return false;
+      if (toDay !== null && r.dia > toDay) return false;
+    }
     if (gerF && r.analista !== gerF) return false;
     return true;
   });
 
-  // Clientes únicos por analista no período (o contato é por cliente, não por linha)
-  const clientsByAn = {};
-  skFilt.forEach(r => {
-    const a = r.analista || 'N/A';
-    if (!clientsByAn[a]) clientsByAn[a] = new Set();
-    clientsByAn[a].add(String(r.external_id));
-  });
   const analistas = gerF ? [gerF] : [...new Set(skFilt.map(r=>r.analista))].filter(Boolean).sort();
 
-  // Contatos feitos por analista
+  // Conta por linhas (igual à tabela) — um registro por client-dia acima de 49k
   const totalByAn = {}, feitoByAn = {}, contatadoDataMap = {};
-  analistas.forEach(a => {
-    const ids = clientsByAn[a] || new Set();
-    totalByAn[a] = ids.size;
-    feitoByAn[a] = 0;
-    ids.forEach(id => {
-      const c = _getContact('saques', id);
-      if (c.feito) {
-        feitoByAn[a]++;
-        if (c.data) contatadoDataMap[c.data] = (contatadoDataMap[c.data]||0)+1;
-      }
-    });
+  skFilt.forEach(r => {
+    const a = r.analista || 'N/A';
+    totalByAn[a] = (totalByAn[a] || 0) + 1;
+    const c = _getContact('saques', String(r.external_id));
+    if (c.feito) {
+      feitoByAn[a] = (feitoByAn[a] || 0) + 1;
+      if (c.data) contatadoDataMap[c.data] = (contatadoDataMap[c.data]||0)+1;
+    }
   });
 
   const totalClientes = analistas.reduce((s,a)=>s+(totalByAn[a]||0),0);
