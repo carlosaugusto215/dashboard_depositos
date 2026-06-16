@@ -310,8 +310,26 @@ tr:last-child td{border-bottom:none}
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Tendência
     </div>
     <div class="sb-sec">Gerência</div>
-    <div class="ni" onclick="goTo('indicadores',this)">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Indicadores
+    <div style="padding:10px 18px 2px;font-size:10.5px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;display:flex;align-items:center;gap:6px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;flex-shrink:0"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Indicadores
+    </div>
+    <div class="ni" onclick="goToInd('chamados',this)" style="padding-left:28px;font-size:12.5px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>Chamados
+    </div>
+    <div class="ni" onclick="goToInd('saques',this)" style="padding-left:28px;font-size:12.5px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><circle cx="12" cy="12" r="10"/><path d="M16 8h-6a2 2 0 000 4h4a2 2 0 010 4H8m4 0v2m0-10V6"/></svg>Saques
+    </div>
+    <div class="ni" onclick="goToInd('depositos',this)" style="padding-left:28px;font-size:12.5px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>Depósitos
+    </div>
+    <div class="ni" onclick="goToInd('cashback',this)" style="padding-left:28px;font-size:12.5px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M12 2a10 10 0 100 20A10 10 0 0012 2z"/><path d="M15 9.354a4 4 0 10-4 6.292"/><path d="M9 12h6"/></svg>CashBack
+    </div>
+    <div class="ni" onclick="goToInd('torneios',this)" style="padding-left:28px;font-size:12.5px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M8 21h8m-4-4v4M5 3h14l-1 8a6 6 0 01-12 0L5 3z"/><path d="M4 3H3m18 0h-1"/></svg>Torneios
+    </div>
+    <div class="ni" onclick="goToInd('grandesperdas',this)" style="padding-left:28px;font-size:12.5px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>Grandes Perdas
     </div>
     <div class="ni" onclick="goTo('ranking',this)" style="padding-left:28px;font-size:12.5px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M8 21h8m-4-4v4M5 3h14l-1 7a6 6 0 01-12 0L5 3z"/><path d="M4 3H3m18 0h-1"/></svg>Ranking de Contatos
@@ -948,100 +966,110 @@ tr:last-child td{border-bottom:none}
     <div style="font-size:14px;color:var(--text3)">Clique em <strong style="color:var(--text2)">Atualizar</strong> para carregar os dados da planilha</div>
   </div>
   <div id="ind-content" style="display:none">
-    <div class="kg" id="ind-kpis" style="margin-bottom:16px"></div>
-    <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:14px;margin-bottom:16px">
-      <div class="card">
-        <div class="ch"><div class="ct">Por Gerente</div><div class="cs">feitos vs pendentes</div></div>
-        <div style="height:240px;position:relative"><canvas id="ind-ger-chart"></canvas></div>
+
+    <!-- ── CHAMADOS ── -->
+    <div id="ind-sec-chamados">
+      <div class="kg" id="ind-kpis" style="margin-bottom:16px"></div>
+      <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:14px;margin-bottom:16px">
+        <div class="card">
+          <div class="ch"><div class="ct">Por Gerente</div><div class="cs">feitos vs pendentes</div></div>
+          <div style="height:240px;position:relative"><canvas id="ind-ger-chart"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="ch"><div class="ct">Evolução Diária</div><div class="cs">contatos feitos por data</div></div>
+          <div style="height:240px;position:relative"><canvas id="ind-evo-chart"></canvas></div>
+        </div>
       </div>
       <div class="card">
-        <div class="ch"><div class="ct">Evolução Diária</div><div class="cs">contatos feitos por data</div></div>
-        <div style="height:240px;position:relative"><canvas id="ind-evo-chart"></canvas></div>
+        <div class="ch"><div class="ct">Detalhamento por Gerente</div><div class="cs">feitos / total · pendentes · taxa</div></div>
+        <div id="ind-ger-tbl" style="overflow-x:auto"></div>
       </div>
     </div>
-    <div class="card">
-      <div class="ch"><div class="ct">Detalhamento por Gerente</div><div class="cs">feitos / total · pendentes · taxa</div></div>
-      <div id="ind-ger-tbl" style="overflow-x:auto"></div>
-    </div>
+
     <!-- ── SAQUES ── -->
-    <div style="font-size:15px;font-weight:700;color:var(--text);margin:28px 0 14px;padding-top:10px;border-top:1px solid var(--border)">Indicadores — Saques</div>
-    <div class="kg" id="ind-sk-kpis" style="margin-bottom:16px"></div>
-    <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:14px;margin-bottom:16px">
-      <div class="card">
-        <div class="ch"><div class="ct">Por Analista</div><div class="cs">volume de saques vs depósitos</div></div>
-        <div style="height:240px;position:relative"><canvas id="ind-sk-ger-chart"></canvas></div>
+    <div id="ind-sec-saques" style="display:none">
+      <div class="kg" id="ind-sk-kpis" style="margin-bottom:16px"></div>
+      <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:14px;margin-bottom:16px">
+        <div class="card">
+          <div class="ch"><div class="ct">Por Analista</div><div class="cs">feitos vs pendentes</div></div>
+          <div style="height:240px;position:relative"><canvas id="ind-sk-ger-chart"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="ch"><div class="ct">Evolução Diária</div><div class="cs">contatos feitos por data</div></div>
+          <div style="height:240px;position:relative"><canvas id="ind-sk-evo-chart"></canvas></div>
+        </div>
       </div>
       <div class="card">
-        <div class="ch"><div class="ct">Evolução Diária</div><div class="cs">volume de saques por dia</div></div>
-        <div style="height:240px;position:relative"><canvas id="ind-sk-evo-chart"></canvas></div>
+        <div class="ch"><div class="ct">Detalhamento por Analista</div><div class="cs">feitos / total · pendentes · taxa</div></div>
+        <div id="ind-sk-tbl" style="overflow-x:auto"></div>
       </div>
     </div>
-    <div class="card">
-      <div class="ch"><div class="ct">Detalhamento por Analista</div><div class="cs">volume · qtd · destaques · net</div></div>
-      <div id="ind-sk-tbl" style="overflow-x:auto"></div>
-    </div>
-  </div>
 
-  <!-- ── DEPÓSITOS ── -->
-  <div style="font-size:15px;font-weight:700;color:var(--text);margin:28px 0 14px;padding-top:10px;border-top:1px solid var(--border)">Indicadores — Depósitos</div>
-  <div class="kg" id="ind-dep-kpis" style="margin-bottom:16px"></div>
-  <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:14px;margin-bottom:16px">
-    <div class="card">
-      <div class="ch"><div class="ct">Por Analista</div><div class="cs">feitos vs pendentes por categoria</div></div>
-      <div style="height:260px;position:relative"><canvas id="ind-dep-ger-chart"></canvas></div>
+    <!-- ── DEPÓSITOS ── -->
+    <div id="ind-sec-depositos" style="display:none">
+      <div class="kg" id="ind-dep-kpis" style="margin-bottom:16px"></div>
+      <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:14px;margin-bottom:16px">
+        <div class="card">
+          <div class="ch"><div class="ct">Por Analista</div><div class="cs">feitos vs pendentes por categoria</div></div>
+          <div style="height:260px;position:relative"><canvas id="ind-dep-ger-chart"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="ch"><div class="ct">Por Categoria</div><div class="cs">2 dias · 3 dias · +3 dias</div></div>
+          <div style="height:260px;position:relative"><canvas id="ind-dep-cat-chart"></canvas></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="ch"><div class="ct">Detalhamento por Analista</div><div class="cs">feitos / total · pendentes · taxa por categoria</div></div>
+        <div id="ind-dep-tbl" style="overflow-x:auto"></div>
+      </div>
     </div>
-    <div class="card">
-      <div class="ch"><div class="ct">Por Categoria</div><div class="cs">2 dias · 3 dias · +3 dias</div></div>
-      <div style="height:260px;position:relative"><canvas id="ind-dep-cat-chart"></canvas></div>
-    </div>
-  </div>
-  <div class="card">
-    <div class="ch"><div class="ct">Detalhamento por Analista</div><div class="cs">feitos / total · pendentes · taxa por categoria</div></div>
-    <div id="ind-dep-tbl" style="overflow-x:auto"></div>
-  </div>
 
-  <!-- ── CASHBACK ── -->
-  <div style="font-size:15px;font-weight:700;color:var(--text);margin:28px 0 14px;padding-top:10px;border-top:1px solid var(--border)">Indicadores — CashBack</div>
-  <div class="kg" id="ind-cb-kpis" style="margin-bottom:16px"></div>
-  <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:14px;margin-bottom:16px">
-    <div class="card">
-      <div class="ch"><div class="ct">Por Analista</div><div class="cs">feitos vs pendentes</div></div>
-      <div style="height:220px;position:relative"><canvas id="ind-cb-ger-chart"></canvas></div>
+    <!-- ── CASHBACK ── -->
+    <div id="ind-sec-cashback" style="display:none">
+      <div class="kg" id="ind-cb-kpis" style="margin-bottom:16px"></div>
+      <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:14px;margin-bottom:16px">
+        <div class="card">
+          <div class="ch"><div class="ct">Por Analista</div><div class="cs">feitos vs pendentes</div></div>
+          <div style="height:220px;position:relative"><canvas id="ind-cb-ger-chart"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="ch"><div class="ct">Por Faixa</div><div class="cs">distribuição dos contatos por faixa de cashback</div></div>
+          <div style="height:220px;position:relative"><canvas id="ind-cb-fx-chart"></canvas></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="ch"><div class="ct">Detalhamento por Analista</div><div class="cs">feitos / total · pendentes · taxa</div></div>
+        <div id="ind-cb-tbl" style="overflow-x:auto"></div>
+      </div>
     </div>
-    <div class="card">
-      <div class="ch"><div class="ct">Por Faixa</div><div class="cs">distribuição dos contatos por faixa de cashback</div></div>
-      <div style="height:220px;position:relative"><canvas id="ind-cb-fx-chart"></canvas></div>
+
+    <!-- ── TORNEIOS ── -->
+    <div id="ind-sec-torneios" style="display:none">
+      <div class="kg" id="ind-tn-kpis" style="margin-bottom:16px"></div>
+      <div class="card" style="margin-bottom:16px">
+        <div class="ch"><div class="ct">Por Analista</div><div class="cs">feitos vs pendentes</div></div>
+        <div style="height:220px;position:relative"><canvas id="ind-tn-ger-chart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="ch"><div class="ct">Detalhamento por Analista</div><div class="cs">feitos / total · pendentes · taxa</div></div>
+        <div id="ind-tn-tbl" style="overflow-x:auto"></div>
+      </div>
     </div>
-  </div>
-  <div class="card" style="margin-bottom:0">
-    <div class="ch"><div class="ct">Detalhamento por Analista</div><div class="cs">feitos / total · pendentes · taxa</div></div>
-    <div id="ind-cb-tbl" style="overflow-x:auto"></div>
-  </div>
 
-  <!-- ── TORNEIOS ── -->
-  <div style="font-size:15px;font-weight:700;color:var(--text);margin:28px 0 14px;padding-top:10px;border-top:1px solid var(--border)">Indicadores — Torneios</div>
-  <div class="kg" id="ind-tn-kpis" style="margin-bottom:16px"></div>
-  <div class="card" style="margin-bottom:16px">
-    <div class="ch"><div class="ct">Por Analista</div><div class="cs">feitos vs pendentes</div></div>
-    <div style="height:220px;position:relative"><canvas id="ind-tn-ger-chart"></canvas></div>
-  </div>
-  <div class="card" style="margin-bottom:0">
-    <div class="ch"><div class="ct">Detalhamento por Analista</div><div class="cs">feitos / total · pendentes · taxa</div></div>
-    <div id="ind-tn-tbl" style="overflow-x:auto"></div>
-  </div>
+    <!-- ── GRANDES PERDAS ── -->
+    <div id="ind-sec-grandesperdas" style="display:none">
+      <div class="kg" id="ind-gp-kpis" style="margin-bottom:16px"></div>
+      <div class="card" style="margin-bottom:16px">
+        <div class="ch"><div class="ct">Por Analista</div><div class="cs">feitos vs pendentes</div></div>
+        <div style="height:220px;position:relative"><canvas id="ind-gp-ger-chart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="ch"><div class="ct">Detalhamento por Analista</div><div class="cs">feitos / total · pendentes · taxa</div></div>
+        <div id="ind-gp-tbl" style="overflow-x:auto"></div>
+      </div>
+    </div>
 
-  <!-- ── GRANDES PERDAS ── -->
-  <div style="font-size:15px;font-weight:700;color:var(--text);margin:28px 0 14px;padding-top:10px;border-top:1px solid var(--border)">Indicadores — Grandes Perdas</div>
-  <div class="kg" id="ind-gp-kpis" style="margin-bottom:16px"></div>
-  <div class="card" style="margin-bottom:16px">
-    <div class="ch"><div class="ct">Por Analista</div><div class="cs">feitos vs pendentes</div></div>
-    <div style="height:220px;position:relative"><canvas id="ind-gp-ger-chart"></canvas></div>
   </div>
-  <div class="card" style="margin-bottom:0">
-    <div class="ch"><div class="ct">Detalhamento por Analista</div><div class="cs">feitos / total · pendentes · taxa</div></div>
-    <div id="ind-gp-tbl" style="overflow-x:auto"></div>
-  </div>
-</div>
 
 <!-- RANKING -->
 <div class="pg" id="pg-ranking">
@@ -1997,7 +2025,7 @@ function goTo(id,el){
   if(id==='ativos'){renderYKPIs();renderYT();}
   if(id==='tendencia')renderTR();
   if(id==='analistas')renderAN();
-  if(id==='indicadores'){if(Object.keys(_indRaw).length===0)renderIndicadores();else _buildInd();}
+  if(id==='indicadores'){_indShowSec(_indSection);if(Object.keys(_indRaw).length===0)renderIndicadores();else _indBuildActive();}
   if(id==='ranking')renderRanking();
 }
 
@@ -2625,9 +2653,9 @@ function _contactRerender(section){
   switch(section){
     case 'ativos': renderYT(); break;
     case 'saques': renderSKContatoKPI(); renderSKTbl(); break;
-    case 'cashback': renderCBTbl(); if(document.getElementById('ind-content')&&document.getElementById('ind-content').style.display!=='none')_buildIndCashback(); break;
-    case 'torneios': renderTNTable(); if(document.getElementById('ind-content')&&document.getElementById('ind-content').style.display!=='none')_buildIndTorneios(); break;
-    case 'grandesperdas': renderGPTbl(); if(document.getElementById('ind-content')&&document.getElementById('ind-content').style.display!=='none')_buildIndGrandesPerdas(); break;
+    case 'cashback': renderCBTbl(); if(document.getElementById('ind-sec-cashback')&&document.getElementById('ind-sec-cashback').style.display!=='none')_buildIndCashback(); break;
+    case 'torneios': renderTNTable(); if(document.getElementById('ind-sec-torneios')&&document.getElementById('ind-sec-torneios').style.display!=='none')_buildIndTorneios(); break;
+    case 'grandesperdas': renderGPTbl(); if(document.getElementById('ind-sec-grandesperdas')&&document.getElementById('ind-sec-grandesperdas').style.display!=='none')_buildIndGrandesPerdas(); break;
     case 'clientes': renderCT(); break;
   }
 }
@@ -4074,6 +4102,9 @@ function sGPPg(p) { gpPg = p; renderGPTbl(); }
 /* INDICADORES — Chamados */
 let _indRaw = {};
 let _indGerFilter = '';
+let _indSection = 'chamados';
+const _IND_SECS = ['chamados','saques','depositos','cashback','torneios','grandesperdas'];
+const _IND_TITLES = {chamados:'Chamados',saques:'Saques',depositos:'Depósitos',cashback:'CashBack',torneios:'Torneios',grandesperdas:'Grandes Perdas'};
 let _indChartGer = null;
 let _indChartEvo = null;
 let _indChartSkGer = null;
@@ -4118,12 +4149,12 @@ async function renderIndicadores() {
   // Atualiza título conforme papel do usuário
   const _s2 = _indGetSession();
   const titleEl = document.getElementById('ind-title');
-  if (titleEl) titleEl.textContent = _s2.role === 'admin' ? 'Indicadores — Chamados' : 'Meus Indicadores — Chamados';
   const uptEl = document.getElementById('ind-upd-time');
   if (uptEl) uptEl.textContent = new Date().toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
   loading.style.display = 'none';
   content.style.display = 'block';
-  _buildInd();
+  _indShowSec(_indSection);
+  _indBuildActive();
 }
 
 // Mescla registros feito=TRUE da Sheets para CH_CONTACTS localStorage
@@ -4158,7 +4189,44 @@ function _indParseDDMM(raw) {
   return isNaN(d.getTime()) ? null : d;
 }
 
-function _indBuild() { if (_indRaw.Chamados) _buildInd(); }
+function _indShowSec(sec) {
+  _indSection = sec;
+  _IND_SECS.forEach(s => {
+    const el = document.getElementById('ind-sec-' + s);
+    if (el) el.style.display = s === sec ? '' : 'none';
+  });
+  const t = document.getElementById('ind-title');
+  if (t) t.textContent = 'Indicadores — ' + (_IND_TITLES[sec] || sec);
+}
+
+function _indBuildActive() {
+  switch (_indSection) {
+    case 'chamados':     if (_indRaw.Chamados) _buildInd(); break;
+    case 'saques':       _buildIndSaques(); break;
+    case 'depositos':    _buildIndDep(); break;
+    case 'cashback':     _buildIndCashback(); break;
+    case 'torneios':     _buildIndTorneios(); break;
+    case 'grandesperdas':_buildIndGrandesPerdas(); break;
+  }
+}
+
+function goToInd(sec, el) {
+  document.querySelectorAll('.pg').forEach(p => p.classList.remove('on'));
+  document.querySelectorAll('.ni').forEach(n => n.classList.remove('on'));
+  document.getElementById('pg-indicadores').classList.add('on');
+  el.classList.add('on');
+  document.getElementById('tb-pg').textContent = 'Indicadores';
+  _indShowSec(sec);
+  if (document.getElementById('ind-content').style.display === 'none' && Object.keys(_indRaw).length === 0) {
+    renderIndicadores();
+  } else if (document.getElementById('ind-content').style.display !== 'none') {
+    _indBuildActive();
+  } else {
+    _indBuildActive();
+  }
+}
+
+function _indBuild() { if (_indRaw.Chamados) _indBuildActive(); }
 
 function _buildInd_OLD_REMOVED() {
   const sheets = ['Chamados','Depositos','Ativos','Saques','CashBack','Torneios','GrandesPerdas','Clientes'];
@@ -4453,7 +4521,6 @@ function _buildInd() {
   if(gerentesF.length===0){tbl+=`<tr><td colspan="4" style="text-align:center;padding:40px;color:var(--text3)">Nenhum dado encontrado</td></tr>`;}
   tbl+='</tbody></table>';
   document.getElementById('ind-ger-tbl').innerHTML=tbl;
-  _buildIndSaques();
 }
 
 function _buildIndSaques() {
@@ -4549,7 +4616,6 @@ function _buildIndSaques() {
   if(analistas.filter(a=>totalByAn[a]>0).length===0){tbl+=`<tr><td colspan="4" style="text-align:center;padding:40px;color:var(--text3)">Nenhum dado encontrado</td></tr>`;}
   tbl+='</tbody></table>';
   document.getElementById('ind-sk-tbl').innerHTML=tbl;
-  _buildIndDep();
 }
 
 function _buildIndDep() {
@@ -4706,7 +4772,6 @@ function _buildIndDep() {
     tbl+='</tbody></table>';
     tblEl.innerHTML = tbl;
   }
-  _buildIndCashback();
 }
 
 /* ── builder reutilizável: lê datas/role, conta feitos, renderiza KPI+chart+tabela ── */
@@ -4791,7 +4856,8 @@ function _indBuildContactBlock(source, section, dayField, useMonth, kpisId, gerC
 }
 
 function _buildIndCashback(){
-  const r=_indBuildContactBlock(CB,'cashback','dia',true,'ind-cb-kpis','ind-cb-ger-chart','ind-cb-tbl');
+  const cbComDep=(CB||[]).filter(r=>r.dep_dia>0);
+  const r=_indBuildContactBlock(cbComDep,'cashback','dia',true,'ind-cb-kpis','ind-cb-ger-chart','ind-cb-tbl');
 
   // Gráfico extra: por faixa de cashback
   const FAIXAS=['+1k','500–1k','100–500','<100'];
@@ -4812,12 +4878,10 @@ function _buildIndCashback(){
     scales:{x:{stacked:true,grid:{color:'#252a3d'},ticks:{color:'#7c8fa8',font:{size:10}}},
             y:{stacked:true,beginAtZero:true,grid:{color:'#252a3d'},ticks:{color:'#7c8fa8',font:{size:10}}}}}});
 
-  _buildIndTorneios();
 }
 
 function _buildIndTorneios(){
   _indBuildContactBlock(TN,'torneios',null,false,'ind-tn-kpis','ind-tn-ger-chart','ind-tn-tbl');
-  _buildIndGrandesPerdas();
 }
 
 function _buildIndGrandesPerdas(){
