@@ -4668,22 +4668,18 @@ function renderRanking() {
   const _isAdm = _sess.role === 'admin';
   const gerF = _isAdm ? '' : (_sess.name || '');
 
-  // Parse "DD/MM/YYYY HH:MM" → day number (int)
-  const parseDay = s => { if(!s) return null; const d=parseInt(s.split('/')[0]); return isNaN(d)?null:d; };
-  // Parse month from contact date
-  const parseMo  = s => { if(!s) return null; const p=s.split('/'); return p.length>=2?parseInt(p[1]):null; };
+  // Parse "DD/MM/YYYY HH:MM" → day number para tabela por dia
+  const parseDay = s => { if(!s) return null; const d=parseInt((s||'').split('/')[0]); return isNaN(d)?null:d; };
 
-  // Collect all analistas from all data sources
-  // CH.mes é string "junho" ou ausente nos imports recentes — não filtrar por mês aqui
+  // Coleta todos os gerentes das três fontes — mesma lógica do menu Indicadores
   const allAn = [...new Set([
     ...(CL||[]).map(c=>c.analista),
     ...(SK||[]).filter(r=>r.mes===curMm&&r.valor>=49000).map(r=>r.analista),
     ...(CH||[]).map(c=>c.gerente)
   ])].filter(Boolean).sort();
 
-  const analistas = gerF ? (allAn.includes(gerF)?[gerF]:[gerF]) : allAn;
+  const analistas = gerF ? [gerF] : allAn;
 
-  // Build data per analista
   const D = {};
   analistas.forEach(a => {
     D[a] = { dep:{'2 dias':0,'3 dias':0,'+3 dias':0}, saques:0, chamados:0, byDay:{}, total:0 };
@@ -4693,37 +4689,31 @@ function renderRanking() {
     if(!D[a].byDay[day]) D[a].byDay[day]={dep_2:0,dep_3:0,dep_3p:0,saq:0,ch:0};
   };
 
-  // Depósitos — usa DEP_CONTACTS
+  // Depósitos — igual _buildIndDep(): todos CL, DEP_CONTACTS[id].feito (sem filtro de data)
   (CL||[]).forEach(c => {
     const a = c.analista; if(!D[a]) return;
     const dc = DEP_CONTACTS[String(c.external_id)];
     if(!dc||!dc.feito) return;
-    const mo = parseMo(dc.data);
-    if(mo!==null&&mo!==curMm) return;
     D[a].dep[c.categoria]=(D[a].dep[c.categoria]||0)+1;
     const day=parseDay(dc.data);
     if(day){ensDay(a,day);const k=c.categoria==='2 dias'?'dep_2':c.categoria==='3 dias'?'dep_3':'dep_3p';D[a].byDay[day][k]++;}
   });
 
-  // Saques — usa CONTACTS['saques']
+  // Saques — igual _buildIndSaques(): SK mes=curMm + valor>=49k, _getContact feito (sem filtro de data)
   (SK||[]).filter(r=>r.mes===curMm&&r.valor>=49000).forEach(r => {
     const a = r.analista; if(!D[a]) return;
     const ct = _getContact('saques', String(r.external_id));
     if(!ct.feito) return;
-    const mo = parseMo(ct.data);
-    if(mo!==null&&mo!==curMm) return;
     D[a].saques++;
     const day=parseDay(ct.data);
     if(day){ensDay(a,day);D[a].byDay[day].saq++;}
   });
 
-  // Chamados — usa CH_CONTACTS (CH.mes é "junho" string ou ausente; não filtrar por mês)
+  // Chamados — igual _buildInd(): todos CH, CH_CONTACTS[ticket_id].feito (sem filtro de data)
   (CH||[]).forEach(c => {
     const a = c.gerente; if(!D[a]) return;
     const ct = CH_CONTACTS[String(c.ticket_id)];
     if(!ct||!ct.feito) return;
-    const mo = parseMo(ct.data);
-    if(mo!==null&&mo!==curMm) return;
     D[a].chamados++;
     const day=parseDay(ct.data);
     if(day){ensDay(a,day);D[a].byDay[day].ch++;}
