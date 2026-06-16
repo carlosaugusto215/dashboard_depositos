@@ -951,6 +951,23 @@ tr:last-child td{border-bottom:none}
       <div class="ch"><div class="ct">Detalhamento por Gerente</div><div class="cs">feitos / total · pendentes · taxa</div></div>
       <div id="ind-ger-tbl" style="overflow-x:auto"></div>
     </div>
+    <!-- ── SAQUES ── -->
+    <div style="font-size:15px;font-weight:700;color:var(--text);margin:28px 0 14px;padding-top:10px;border-top:1px solid var(--border)">Indicadores — Saques</div>
+    <div class="kg" id="ind-sk-kpis" style="margin-bottom:16px"></div>
+    <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:14px;margin-bottom:16px">
+      <div class="card">
+        <div class="ch"><div class="ct">Por Analista</div><div class="cs">volume de saques vs depósitos</div></div>
+        <div style="height:240px;position:relative"><canvas id="ind-sk-ger-chart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="ch"><div class="ct">Evolução Diária</div><div class="cs">volume de saques por dia</div></div>
+        <div style="height:240px;position:relative"><canvas id="ind-sk-evo-chart"></canvas></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="ch"><div class="ct">Detalhamento por Analista</div><div class="cs">volume · qtd · destaques · net</div></div>
+      <div id="ind-sk-tbl" style="overflow-x:auto"></div>
+    </div>
   </div>
 </div>
 </main>
@@ -3901,6 +3918,8 @@ let _indRaw = {};
 let _indGerFilter = '';
 let _indChartGer = null;
 let _indChartEvo = null;
+let _indChartSkGer = null;
+let _indChartSkEvo = null;
 
 async function _gsGet(sheetName) {
   try {
@@ -4271,6 +4290,108 @@ function _buildInd() {
   if(gerentesF.length===0){tbl+=`<tr><td colspan="4" style="text-align:center;padding:40px;color:var(--text3)">Nenhum dado encontrado</td></tr>`;}
   tbl+='</tbody></table>';
   document.getElementById('ind-ger-tbl').innerHTML=tbl;
+  _buildIndSaques();
+}
+
+function _buildIndSaques() {
+  const deVal = (document.getElementById('ind-date-de')||{}).value || '';
+  const ateVal = (document.getElementById('ind-date-ate')||{}).value || '';
+  const fromDate = deVal ? new Date(deVal + 'T00:00:00') : null;
+  const toDate = ateVal ? new Date(ateVal + 'T23:59:59') : null;
+  const fromDay = fromDate ? fromDate.getDate() : null;
+  const toDay   = toDate   ? toDate.getDate()   : null;
+  const fromMo  = fromDate ? fromDate.getMonth()+1 : null;
+  const toMo    = toDate   ? toDate.getMonth()+1   : null;
+
+  const _sess = _indGetSession();
+  const _isAdm = _sess.role === 'admin';
+  const gerF = _isAdm ? _indGerFilter : (_sess.name || '');
+  const fmt = v => 'R$'+Number(v).toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:0});
+
+  // Filtra SK: mês corrente + faixa de dias
+  const skFilt = (SK||[]).filter(r => {
+    if (r.mes !== curMm) return false;
+    if (fromMo !== null && fromMo !== curMm) return false;
+    if (toMo   !== null && toMo   !== curMm) return false;
+    if (fromDay !== null && r.dia < fromDay) return false;
+    if (toDay   !== null && r.dia > toDay)   return false;
+    if (gerF && r.analista !== gerF) return false;
+    return true;
+  });
+
+  // Analistas únicos presentes no período
+  const analistas = gerF ? [gerF] : [...new Set((SK||[]).filter(r=>r.mes===curMm).map(r=>r.analista))].filter(Boolean).sort();
+
+  // Agregados por analista
+  const byAn = {};
+  skFilt.forEach(r => {
+    const a = r.analista || 'N/A';
+    if (!byAn[a]) byAn[a] = {vol:0, dep:0, qtd:0, dest:0};
+    byAn[a].vol  += r.valor || 0;
+    byAn[a].dep  += r.dep_dia || 0;
+    byAn[a].qtd  += r.count_saque || 0;
+    byAn[a].dest += r.destaque ? 1 : 0;
+  });
+
+  // KPIs globais (ou do analista filtrado)
+  const totalVol  = skFilt.reduce((s,r)=>s+(r.valor||0),0);
+  const totalDep  = skFilt.reduce((s,r)=>s+(r.dep_dia||0),0);
+  const totalQtd  = skFilt.reduce((s,r)=>s+(r.count_saque||0),0);
+  const totalDest = skFilt.filter(r=>r.destaque).length;
+  const netSaldo  = totalDep - totalVol;
+  const periodoLabel = (fromDate||toDate)?(fromDate?fromDate.toLocaleDateString('pt-BR'):'início')+' a '+(toDate?toDate.toLocaleDateString('pt-BR'):'hoje'):'mês atual';
+
+  document.getElementById('ind-sk-kpis').innerHTML =
+    `<div class="kc tl"><div class="kl">Volume de Saques</div><div class="kv">${fmt(totalVol)}</div><div class="kf">${totalQtd} operações · ${periodoLabel}</div></div>`+
+    `<div class="kc rd"><div class="kl">Destaques (+50k)</div><div class="kv">${totalDest}</div><div class="kf">saques acima de R$50.000</div></div>`+
+    `<div class="kc ${netSaldo>=0?'gn':'rd'}"><div class="kl">Saldo Net</div><div class="kv">${fmt(netSaldo)}</div><div class="kf">dep ${fmt(totalDep)} − saq ${fmt(totalVol)}</div></div>`+
+    `<div class="kc am"><div class="kl">Volume Médio/Saque</div><div class="kv">${totalQtd>0?fmt(Math.round(totalVol/totalQtd)):'—'}</div><div class="kf">por operação no período</div></div>`;
+
+  // Gráfico por analista
+  const anChart = analistas.filter(a=>byAn[a]);
+  const volData = anChart.map(a=>(byAn[a]||{vol:0}).vol);
+  const depData = anChart.map(a=>(byAn[a]||{dep:0}).dep);
+  const ctx1 = document.getElementById('ind-sk-ger-chart');
+  if(_indChartSkGer){_indChartSkGer.destroy();_indChartSkGer=null;}
+  if(ctx1) _indChartSkGer=new Chart(ctx1,{type:'bar',data:{labels:anChart,datasets:[
+    {label:'Saques',data:volData,backgroundColor:'rgba(239,68,68,.6)',borderRadius:4},
+    {label:'Depósitos',data:depData,backgroundColor:'rgba(16,185,129,.45)',borderRadius:4}
+  ]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{labels:{color:'#7c8fa8',font:{size:11},boxWidth:10}}},
+    scales:{x:{beginAtZero:true,grid:{color:'#252a3d'},ticks:{color:'#7c8fa8',font:{size:10},callback:v=>v>=1000?'R$'+(v/1000).toFixed(0)+'k':'R$'+v}},
+            y:{grid:{color:'#252a3d'},ticks:{color:'#7c8fa8',font:{size:10}}}}}});
+
+  // Gráfico evolução diária
+  const dayMap = {};
+  skFilt.forEach(r=>{const d=String(r.dia).padStart(2,'0')+'/'+String(curMm).padStart(2,'0');dayMap[d]=(dayMap[d]||0)+(r.valor||0);});
+  const days = Object.keys(dayMap).sort((a,b)=>{const [da,ma]=a.split('/').map(Number),[db,mb]=b.split('/').map(Number);return ma!==mb?ma-mb:da-db;});
+  const ctx2 = document.getElementById('ind-sk-evo-chart');
+  if(_indChartSkEvo){_indChartSkEvo.destroy();_indChartSkEvo=null;}
+  if(ctx2) _indChartSkEvo=new Chart(ctx2,{type:'line',data:{labels:days,datasets:[{label:'Volume',data:days.map(d=>dayMap[d]),borderColor:'#ef4444',backgroundColor:'rgba(239,68,68,.1)',tension:0.3,fill:true,pointRadius:4,pointBackgroundColor:'#ef4444'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#7c8fa8',font:{size:11},boxWidth:10}}},scales:{x:{grid:{color:'#252a3d'},ticks:{color:'#7c8fa8',font:{size:10}}},y:{beginAtZero:true,grid:{color:'#252a3d'},ticks:{color:'#7c8fa8',font:{size:10},callback:v=>v>=1000?'R$'+(v/1000).toFixed(0)+'k':'R$'+v}}}}});
+
+  // Tabela por analista
+  const anTbl = gerF ? [gerF] : analistas.filter(a=>byAn[a]);
+  let tbl='<table style="width:100%;border-collapse:collapse;font-size:12px">';
+  tbl+='<thead><tr style="border-bottom:1px solid var(--border)">';
+  tbl+='<th style="text-align:left;padding:9px 12px;color:var(--text3);font-weight:600">Analista</th>';
+  tbl+='<th style="text-align:right;padding:9px 12px;color:var(--text3);font-weight:600">Volume Saques</th>';
+  tbl+='<th style="text-align:center;padding:9px 12px;color:var(--text3);font-weight:600">Qtd</th>';
+  tbl+='<th style="text-align:center;padding:9px 12px;color:var(--text3);font-weight:600">Destaques</th>';
+  tbl+='<th style="text-align:right;padding:9px 12px;color:var(--text3);font-weight:600">Net (Dep−Saq)</th></tr></thead><tbody>';
+  anTbl.forEach(a=>{
+    const d=byAn[a]||{vol:0,dep:0,qtd:0,dest:0};
+    const net=d.dep-d.vol;
+    tbl+='<tr style="border-bottom:1px solid var(--border)">';
+    tbl+=`<td style="padding:9px 12px;color:var(--text);font-weight:500">${a}</td>`;
+    tbl+=`<td style="text-align:right;padding:9px 12px;color:var(--crit);font-weight:600">${fmt(d.vol)}</td>`;
+    tbl+=`<td style="text-align:center;padding:9px 12px;color:var(--text2)">${d.qtd}</td>`;
+    tbl+=`<td style="text-align:center;padding:9px 12px;color:${d.dest>0?'var(--meta)':'var(--text3)'};font-weight:${d.dest>0?'700':'400'}">${d.dest}</td>`;
+    tbl+=`<td style="text-align:right;padding:9px 12px;font-weight:700;color:${net>=0?'var(--ok)':'var(--crit)'}">${fmt(net)}</td>`;
+    tbl+='</tr>';
+  });
+  if(anTbl.length===0){tbl+=`<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text3)">Nenhum dado de saques encontrado</td></tr>`;}
+  tbl+='</tbody></table>';
+  document.getElementById('ind-sk-tbl').innerHTML=tbl;
 }
 
 function _indSetGer(v) { _indGerFilter = v; _indBuild(); }
