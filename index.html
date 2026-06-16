@@ -3161,7 +3161,8 @@ function setSKContatoFilter(f) {
 function renderSKContatoKPI() {
   const el = document.getElementById('sk-contato-kpi');
   if (!el) return;
-  const all = getSKFiltered().filter(r => r.valor >= 49000);
+  const gAn = (document.getElementById('g-an')||{}).value || '';
+  const all = (SK||[]).filter(r => r.mes === curMm && r.valor >= 49000 && (!gAn || r.analista === gAn));
   const byAn = {};
   all.forEach(r => {
     if (!byAn[r.analista]) byAn[r.analista] = {total:0, feito:0};
