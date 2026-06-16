@@ -4272,6 +4272,11 @@ function goToInd(sec, el) {
   } else {
     _indBuildActive();
   }
+  // Sincroniza contatos da seção atual em background para refletir o que foi gravado na planilha
+  const _secSheet={saques:'Saques',cashback:'CashBack',torneios:'Torneios',grandesperdas:'GrandesPerdas'}[sec];
+  if(_secSheet){
+    _gsGetContacts(_secSheet).then(d=>{if(d&&d.length)_syncContactSectionFromSheets(d,sec);}).catch(()=>{});
+  }
 }
 
 function _indBuild() { if (_indRaw.Chamados) _indBuildActive(); }
