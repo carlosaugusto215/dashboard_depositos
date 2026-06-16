@@ -239,9 +239,9 @@ tr:last-child td{border-bottom:none}
       </div>
     </div>
     <form class="lf" onsubmit="doLogin(event)">
-      <label>Usuário</label>
+      <label for="l-usr">Usuário</label>
       <input type="text" id="l-usr" placeholder="seu usuário" autocomplete="username" autofocus>
-      <label>Senha</label>
+      <label for="l-pwd">Senha</label>
       <input type="password" id="l-pwd" placeholder="••••••••" autocomplete="current-password">
       <div class="lerr" id="l-err"></div>
       <button type="submit">Entrar</button>
@@ -4296,7 +4296,7 @@ document.addEventListener('keydown', e => { if(e.key==='Escape'){ closeChModal()
   <div style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:26px 28px;width:440px;max-width:92vw;box-shadow:0 20px 60px rgba(0,0,0,.5)">
     <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:6px">Registrar Contato</div>
     <div id="ch-obs-info" style="font-size:12px;color:var(--text3);margin-bottom:18px;line-height:1.6"></div>
-    <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:6px">Observação</label>
+    <label for="ch-obs-txt" style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:6px">Observação</label>
     <textarea id="ch-obs-txt" placeholder="Descreva como foi o contato, o que foi combinado…" rows="4"
       style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:13px;resize:vertical;box-sizing:border-box;font-family:inherit;outline:none"></textarea>
     <div style="display:flex;gap:8px;margin-top:18px;justify-content:flex-end">
@@ -4310,7 +4310,7 @@ document.addEventListener('keydown', e => { if(e.key==='Escape'){ closeChModal()
   <div style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:26px 28px;width:440px;max-width:92vw;box-shadow:0 20px 60px rgba(0,0,0,.5)">
     <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:6px">Registrar Contato</div>
     <div id="contact-modal-info" style="font-size:12px;color:var(--text3);margin-bottom:18px;line-height:1.6"></div>
-    <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:6px">Observação</label>
+    <label for="contact-modal-txt" style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:6px">Observação</label>
     <textarea id="contact-modal-txt" placeholder="Descreva como foi o contato…" rows="4"
       style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:13px;resize:vertical;box-sizing:border-box;font-family:inherit;outline:none"></textarea>
     <div style="display:flex;gap:8px;margin-top:18px;justify-content:flex-end">
@@ -4324,7 +4324,7 @@ document.addEventListener('keydown', e => { if(e.key==='Escape'){ closeChModal()
   <div style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:26px 28px;width:440px;max-width:92vw;box-shadow:0 20px 60px rgba(0,0,0,.5)">
     <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:6px">Registrar Contato</div>
     <div id="dep-obs-info" style="font-size:12px;color:var(--text3);margin-bottom:18px;line-height:1.6"></div>
-    <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:6px">Observação</label>
+    <label for="dep-obs-txt" style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:6px">Observação</label>
     <textarea id="dep-obs-txt" placeholder="Descreva como foi o contato, o que foi combinado…" rows="4"
       style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:13px;resize:vertical;box-sizing:border-box;font-family:inherit;outline:none"></textarea>
     <div style="display:flex;gap:8px;margin-top:18px;justify-content:flex-end">
