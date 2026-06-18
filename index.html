@@ -2034,6 +2034,7 @@ function goTo(id,el){
     [['Saques','saques'],['CashBack','cashback'],['Torneios','torneios'],['GrandesPerdas','grandesperdas']].forEach(([sh,sec])=>{
       _gsGetContacts(sh).then(d=>{if(d&&d.length){_syncContactSectionFromSheets(d,sec);renderRanking();}}).catch(()=>{});
     });
+    _gsGetContacts('Depositos').then(d=>{if(d&&d.length){_syncDepContactsFromSheets(d);renderRanking();}}).catch(()=>{});
   }
 }
 
@@ -4225,6 +4226,25 @@ function _syncContactSectionFromSheets(sheetsData, section) {
   if (changed) { _saveContacts(); _contactRerender(section); }
 }
 
+function _syncDepContactsFromSheets(sheetsData) {
+  if (!Array.isArray(sheetsData) || sheetsData.length === 0) return;
+  let changed = false;
+  sheetsData.forEach(r => {
+    const feito = r.feito===true||r.feito==='TRUE'||r.feito==='true'||
+                  r.Feito===true||r.Feito==='TRUE'||r.Feito==='true';
+    const id = String(r.client_id||r.external_id||r.clientId||r.externalId||'');
+    if(!id) return;
+    if (feito && !DEP_CONTACTS[id]?.feito) {
+      DEP_CONTACTS[id] = {feito:true, data:String(r.data_contato||r.dataContato||''), obs:String(r.observacao||r.obs||'')};
+      changed = true;
+    }
+  });
+  if (changed) {
+    localStorage.setItem('dep_contacts', JSON.stringify(DEP_CONTACTS));
+    renderDL();
+  }
+}
+
 // Parser robusto de datas — suporta dd/mm/yyyy, yyyy-mm-dd e strings nativas do Sheets
 function _indParseDDMM(raw) {
   if (!raw) return null;
@@ -4276,6 +4296,9 @@ function goToInd(sec, el) {
   const _secSheet={saques:'Saques',cashback:'CashBack',torneios:'Torneios',grandesperdas:'GrandesPerdas'}[sec];
   if(_secSheet){
     _gsGetContacts(_secSheet).then(d=>{if(d&&d.length)_syncContactSectionFromSheets(d,sec);}).catch(()=>{});
+  }
+  if(sec==='depositos'){
+    _gsGetContacts('Depositos').then(d=>{if(d&&d.length)_syncDepContactsFromSheets(d);}).catch(()=>{});
   }
 }
 
