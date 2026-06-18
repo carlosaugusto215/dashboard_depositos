@@ -5096,15 +5096,25 @@ function renderRanking() {
     if(day){ensDay(a,day);D[a].byDay[day].cb++;}
   });
 
-  // Torneios — TN array, clientes únicos contatados (todos os torneios)
-  const _tnVisto=new Set();
+  // Torneios — 1ª passagem: CONTACTS['torneios'] com analista gravado
+  const _tnCounted=new Set();
+  Object.entries(CONTACTS['torneios']||{}).forEach(([sid,ct])=>{
+    if(!ct.feito||!ct.analista) return;
+    const a=ct.analista; if(!D[a]) return;
+    if(_tnCounted.has(sid)) return;
+    _tnCounted.add(sid);
+    D[a].torneios++;
+    const day=parseDay(ct.data);
+    if(day){ensDay(a,day);D[a].byDay[day].tn++;}
+  });
+  // 2ª passagem: TN array para entradas sem analista (marcadas localmente)
   (TN||[]).forEach(r => {
     const a=r.analista; if(!D[a]) return;
     const sid=String(r.external_id);
-    if(_tnVisto.has(sid)) return;
+    if(_tnCounted.has(sid)) return;
     const ct=_getContact('torneios',sid);
     if(!ct.feito) return;
-    _tnVisto.add(sid);
+    _tnCounted.add(sid);
     D[a].torneios++;
     const day=parseDay(ct.data);
     if(day){ensDay(a,day);D[a].byDay[day].tn++;}
