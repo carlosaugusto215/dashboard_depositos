@@ -5038,15 +5038,25 @@ function renderRanking() {
     if(day){ensDay(a,day);const k=c.categoria==='2 dias'?'dep_2':c.categoria==='3 dias'?'dep_3':'dep_3p';D[a].byDay[day][k]++;}
   });
 
-  // Saques — SK mes=curMm + valor>=49k, cliente único por external_id
-  const _skVisto=new Set();
+  // Saques — 1ª passagem: CONTACTS['saques'] com analista gravado (cobre todos os clientes contactados)
+  const _skCounted=new Set();
+  Object.entries(CONTACTS['saques']||{}).forEach(([sid,ct])=>{
+    if(!ct.feito||!ct.analista) return;
+    const a=ct.analista; if(!D[a]) return;
+    if(_skCounted.has(sid)) return;
+    _skCounted.add(sid);
+    D[a].saques++;
+    const day=parseDay(ct.data);
+    if(day){ensDay(a,day);D[a].byDay[day].saq++;}
+  });
+  // 2ª passagem: SK array para entradas sem analista (marcadas localmente antes do sync)
   (SK||[]).filter(r=>r.mes===curMm&&r.valor>=49000).forEach(r => {
     const a = r.analista; if(!D[a]) return;
     const sid=String(r.external_id);
-    if(_skVisto.has(sid)) return;
+    if(_skCounted.has(sid)) return;
     const ct = _getContact('saques', sid);
     if(!ct.feito) return;
-    _skVisto.add(sid);
+    _skCounted.add(sid);
     D[a].saques++;
     const day=parseDay(ct.data);
     if(day){ensDay(a,day);D[a].byDay[day].saq++;}
