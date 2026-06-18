@@ -4218,8 +4218,9 @@ function _syncContactSectionFromSheets(sheetsData, section) {
     // Aceita client_id ou external_id como campo de identificação (App Scripts podem variar)
     const id = String(r.client_id||r.external_id||r.clientId||r.externalId||'');
     if(!id) return;
-    if (feito && !CONTACTS[section][id]?.feito) {
-      CONTACTS[section][id] = {feito:true, data:String(r.data_contato||r.dataContato||''), obs:String(r.observacao||r.obs||'')};
+    if (feito && (!CONTACTS[section][id]?.feito || !CONTACTS[section][id]?.analista)) {
+      const existing = CONTACTS[section][id] || {};
+      CONTACTS[section][id] = {feito:true, data:existing.data||String(r.data_contato||r.dataContato||''), obs:existing.obs||String(r.observacao||r.obs||''), analista:String(r.analista||existing.analista||'')};
       changed = true;
     }
   });
@@ -5037,11 +5038,15 @@ function renderRanking() {
     if(day){ensDay(a,day);const k=c.categoria==='2 dias'?'dep_2':c.categoria==='3 dias'?'dep_3':'dep_3p';D[a].byDay[day][k]++;}
   });
 
-  // Saques — igual _buildIndSaques(): SK mes=curMm + valor>=49k, _getContact feito (sem filtro de data)
+  // Saques — SK mes=curMm + valor>=49k, cliente único por external_id
+  const _skVisto=new Set();
   (SK||[]).filter(r=>r.mes===curMm&&r.valor>=49000).forEach(r => {
     const a = r.analista; if(!D[a]) return;
-    const ct = _getContact('saques', String(r.external_id));
+    const sid=String(r.external_id);
+    if(_skVisto.has(sid)) return;
+    const ct = _getContact('saques', sid);
     if(!ct.feito) return;
+    _skVisto.add(sid);
     D[a].saques++;
     const day=parseDay(ct.data);
     if(day){ensDay(a,day);D[a].byDay[day].saq++;}
@@ -5057,15 +5062,25 @@ function renderRanking() {
     if(day){ensDay(a,day);D[a].byDay[day].ch++;}
   });
 
-  // Cashback — CB array, clientes únicos contatados
-  const _cbVisto=new Set();
+  // Cashback — 1ª passagem: CONTACTS['cashback'] com analista (cobre clientes fora do CB array)
+  const _cbCounted=new Set();
+  Object.entries(CONTACTS['cashback']||{}).forEach(([sid,ct])=>{
+    if(!ct.feito||!ct.analista) return;
+    const a=ct.analista; if(!D[a]) return;
+    if(_cbCounted.has(sid)) return;
+    _cbCounted.add(sid);
+    D[a].cashback++;
+    const day=parseDay(ct.data);
+    if(day){ensDay(a,day);D[a].byDay[day].cb++;}
+  });
+  // 2ª passagem: CB array para entradas sem analista (marcadas localmente)
   (CB||[]).forEach(r => {
     const a=r.analista; if(!D[a]) return;
     const sid=String(r.external_id);
-    if(_cbVisto.has(sid)) return;
+    if(_cbCounted.has(sid)) return;
     const ct=_getContact('cashback',sid);
     if(!ct.feito) return;
-    _cbVisto.add(sid);
+    _cbCounted.add(sid);
     D[a].cashback++;
     const day=parseDay(ct.data);
     if(day){ensDay(a,day);D[a].byDay[day].cb++;}
