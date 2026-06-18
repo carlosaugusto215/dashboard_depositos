@@ -4234,8 +4234,15 @@ function _syncDepContactsFromSheets(sheetsData) {
                   r.Feito===true||r.Feito==='TRUE'||r.Feito==='true';
     const id = String(r.client_id||r.external_id||r.clientId||r.externalId||'');
     if(!id) return;
-    if (feito && !DEP_CONTACTS[id]?.feito) {
-      DEP_CONTACTS[id] = {feito:true, data:String(r.data_contato||r.dataContato||''), obs:String(r.observacao||r.obs||'')};
+    if (feito && (!DEP_CONTACTS[id]?.feito || !DEP_CONTACTS[id]?.analista)) {
+      const existing = DEP_CONTACTS[id] || {};
+      DEP_CONTACTS[id] = {
+        feito: true,
+        data: existing.data || String(r.data_contato||r.dataContato||''),
+        obs: existing.obs || String(r.observacao||r.obs||''),
+        analista: String(r.analista||existing.analista||''),
+        categoria: String(r.categoria||'').replace('>','+')||existing.categoria||'+3 dias'
+      };
       changed = true;
     }
   });
@@ -5005,11 +5012,26 @@ function renderRanking() {
     if(!D[a].byDay[day]) D[a].byDay[day]={dep_2:0,dep_3:0,dep_3p:0,saq:0,ch:0,cb:0,tn:0,gp:0};
   };
 
-  // Depósitos — igual _buildIndDep(): todos CL, DEP_CONTACTS[id].feito (sem filtro de data)
+  // Depósitos — 1ª passagem: DEP_CONTACTS com analista gravado pelo Sheets (cobre todos os clientes)
+  const _depCounted = new Set();
+  Object.entries(DEP_CONTACTS||{}).forEach(([id, dc]) => {
+    if(!dc.feito||!dc.analista) return;
+    const a = dc.analista; if(!D[a]) return;
+    if(_depCounted.has(id)) return;
+    _depCounted.add(id);
+    const cat = dc.categoria||'+3 dias';
+    D[a].dep[cat]=(D[a].dep[cat]||0)+1;
+    const day=parseDay(dc.data);
+    if(day){ensDay(a,day);const k=cat==='2 dias'?'dep_2':cat==='3 dias'?'dep_3':'dep_3p';D[a].byDay[day][k]++;}
+  });
+  // 2ª passagem: CL para entradas sem analista no DEP_CONTACTS (marcadas localmente antes do sync)
   (CL||[]).forEach(c => {
-    const a = c.analista; if(!D[a]) return;
-    const dc = DEP_CONTACTS[String(c.external_id)];
+    const id=String(c.external_id);
+    if(_depCounted.has(id)) return;
+    const dc = DEP_CONTACTS[id];
     if(!dc||!dc.feito) return;
+    const a = c.analista; if(!D[a]) return;
+    _depCounted.add(id);
     D[a].dep[c.categoria]=(D[a].dep[c.categoria]||0)+1;
     const day=parseDay(dc.data);
     if(day){ensDay(a,day);const k=c.categoria==='2 dias'?'dep_2':c.categoria==='3 dias'?'dep_3':'dep_3p';D[a].byDay[day][k]++;}
