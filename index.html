@@ -4112,6 +4112,7 @@ function sGPPg(p) { gpPg = p; renderGPTbl(); }
 let _indRaw = {};
 let _indGerFilter = '';
 let _indSection = 'chamados';
+let _rankDiaFil = null;
 const _IND_SECS = ['chamados','saques','depositos','cashback','torneios','grandesperdas'];
 const _IND_TITLES = {chamados:'Chamados',saques:'Saques',depositos:'Depósitos',cashback:'CashBack',torneios:'Torneios',grandesperdas:'Grandes Perdas'};
 let _indChartGer = null;
@@ -5210,49 +5211,119 @@ function renderRanking() {
 
   // ── Por Dia table ──────────────────────────────────────────────
   const allDays=[...new Set(sorted.flatMap(a=>Object.keys(D[a].byDay).map(Number)))].sort((a,b)=>a-b);
+  if(_rankDiaFil!==null&&!allDays.includes(_rankDiaFil))_rankDiaFil=null;
 
-  let t2='<table style="width:100%;border-collapse:collapse;font-size:11px">';
-  t2+='<thead><tr style="border-bottom:2px solid var(--border)">';
-  t2+=`<th style="text-align:left;padding:8px 12px;color:var(--text3);font-weight:600;white-space:nowrap;position:sticky;left:0;background:var(--bg2)">Gerente</th>`;
+  // Seletor de dia
+  const btnBase='padding:5px 14px;border-radius:20px;border:1px solid;cursor:pointer;font-size:12px;font-weight:600;transition:all .15s;';
+  const btnOn=btnBase+'background:var(--teal);color:#fff;border-color:var(--teal)';
+  const btnOff=btnBase+'background:var(--bg3);color:var(--text2);border-color:var(--border)';
+  let t2=`<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">`;
+  t2+=`<button onclick="_rankDiaFil=null;renderRanking()" style="${_rankDiaFil===null?btnOn:btnOff}">Todos</button>`;
   allDays.forEach(day=>{
-    t2+=`<th style="text-align:center;padding:8px 5px;color:var(--text3);font-weight:600;min-width:38px">Dia ${day}</th>`;
+    t2+=`<button onclick="_rankDiaFil=${day};renderRanking()" style="${_rankDiaFil===day?btnOn:btnOff}">Dia ${String(day).padStart(2,'0')}</button>`;
   });
-  t2+=`<th style="text-align:center;padding:8px 12px;color:var(--teal);font-weight:700;white-space:nowrap">Total mês</th>`;
-  t2+='</tr></thead><tbody>';
+  t2+='</div>';
 
-  sorted.forEach((a,i) => {
-    const d=D[a];
-    const bg=i===0?'rgba(255,215,0,.04)':i===1?'rgba(192,192,192,.03)':i===2?'rgba(205,127,50,.03)':'';
-    t2+=`<tr style="border-bottom:1px solid var(--border);background:${bg}">`;
-    t2+=`<td style="padding:8px 12px;color:var(--text);font-weight:${i===0?700:500};white-space:nowrap;position:sticky;left:0;background:${bg||'var(--bg2)'}">${medals[i]||''} ${a}</td>`;
+  if(_rankDiaFil===null){
+    // Visão geral — dias como colunas (tabela horizontal)
+    t2+='<table style="width:100%;border-collapse:collapse;font-size:11px">';
+    t2+='<thead><tr style="border-bottom:2px solid var(--border)">';
+    t2+=`<th style="text-align:left;padding:8px 12px;color:var(--text3);font-weight:600;white-space:nowrap;position:sticky;left:0;background:var(--bg2)">Gerente</th>`;
     allDays.forEach(day=>{
-      const bd=d.byDay[day];
-      if(!bd){
-        t2+=`<td style="text-align:center;padding:8px 5px;color:var(--border)">·</td>`;
-      } else {
-        const tot=bd.dep_2+bd.dep_3+bd.dep_3p+bd.saq+bd.ch+(bd.cb||0)+(bd.tn||0)+(bd.gp||0);
-        const depT=bd.dep_2+bd.dep_3+bd.dep_3p;
-        const parts=[];
-        if(depT>0)parts.push(`<span style="color:#4f9dff;font-size:9px">${depT}dep</span>`);
-        if(bd.saq>0)parts.push(`<span style="color:#10b981;font-size:9px">${bd.saq}sk</span>`);
-        if(bd.ch>0)parts.push(`<span style="color:#a78bfa;font-size:9px">${bd.ch}ch</span>`);
-        if(bd.cb>0)parts.push(`<span style="color:#f97316;font-size:9px">${bd.cb}cb</span>`);
-        if(bd.tn>0)parts.push(`<span style="color:#8b5cf6;font-size:9px">${bd.tn}tn</span>`);
-        if(bd.gp>0)parts.push(`<span style="color:#f43f5e;font-size:9px">${bd.gp}gp</span>`);
-        t2+=`<td style="text-align:center;padding:6px 5px;vertical-align:middle">`;
-        t2+=`<div style="font-weight:700;font-size:13px;color:var(--text);line-height:1">${tot}</div>`;
-        t2+=`<div style="margin-top:2px;display:flex;flex-direction:column;align-items:center;gap:1px">${parts.join('')}</div>`;
-        t2+=`</td>`;
-      }
+      t2+=`<th style="text-align:center;padding:8px 5px;color:var(--text3);font-weight:600;min-width:38px">Dia ${day}</th>`;
     });
-    t2+=`<td style="text-align:center;padding:8px 12px;color:var(--teal);font-weight:700;font-size:14px">${d.total}</td>`;
-    t2+='</tr>';
-  });
+    t2+=`<th style="text-align:center;padding:8px 12px;color:var(--teal);font-weight:700;white-space:nowrap">Total mês</th>`;
+    t2+='</tr></thead><tbody>';
+    sorted.forEach((a,i)=>{
+      const d=D[a];
+      const bg=i===0?'rgba(255,215,0,.04)':i===1?'rgba(192,192,192,.03)':i===2?'rgba(205,127,50,.03)':'';
+      t2+=`<tr style="border-bottom:1px solid var(--border);background:${bg}">`;
+      t2+=`<td style="padding:8px 12px;color:var(--text);font-weight:${i===0?700:500};white-space:nowrap;position:sticky;left:0;background:${bg||'var(--bg2)'}">${medals[i]||''} ${a}</td>`;
+      allDays.forEach(day=>{
+        const bd=d.byDay[day];
+        if(!bd){t2+=`<td style="text-align:center;padding:8px 5px;color:var(--border)">·</td>`;}
+        else{
+          const tot=bd.dep_2+bd.dep_3+bd.dep_3p+bd.saq+bd.ch+(bd.cb||0)+(bd.tn||0)+(bd.gp||0);
+          const depT=bd.dep_2+bd.dep_3+bd.dep_3p;const parts=[];
+          if(depT>0)parts.push(`<span style="color:#4f9dff;font-size:9px">${depT}dep</span>`);
+          if(bd.saq>0)parts.push(`<span style="color:#10b981;font-size:9px">${bd.saq}sk</span>`);
+          if(bd.ch>0)parts.push(`<span style="color:#a78bfa;font-size:9px">${bd.ch}ch</span>`);
+          if(bd.cb>0)parts.push(`<span style="color:#f97316;font-size:9px">${bd.cb}cb</span>`);
+          if(bd.tn>0)parts.push(`<span style="color:#8b5cf6;font-size:9px">${bd.tn}tn</span>`);
+          if(bd.gp>0)parts.push(`<span style="color:#f43f5e;font-size:9px">${bd.gp}gp</span>`);
+          t2+=`<td style="text-align:center;padding:6px 5px;vertical-align:middle"><div style="font-weight:700;font-size:13px;color:var(--text);line-height:1">${tot}</div><div style="margin-top:2px;display:flex;flex-direction:column;align-items:center;gap:1px">${parts.join('')}</div></td>`;
+        }
+      });
+      t2+=`<td style="text-align:center;padding:8px 12px;color:var(--teal);font-weight:700;font-size:14px">${d.total}</td></tr>`;
+    });
+    if(allDays.length===0)t2+=`<tr><td colspan="2" style="text-align:center;padding:40px;color:var(--text3)">Nenhum contato com data registrada</td></tr>`;
+    t2+='</tbody></table>';
+  } else {
+    // Visão por dia — mesmo formato do Ranking Geral
+    const dayRows=sorted.map(a=>{
+      const bd=D[a].byDay[_rankDiaFil]||{dep_2:0,dep_3:0,dep_3p:0,saq:0,ch:0,cb:0,tn:0,gp:0};
+      const tot=(bd.dep_2||0)+(bd.dep_3||0)+(bd.dep_3p||0)+(bd.saq||0)+(bd.ch||0)+(bd.cb||0)+(bd.tn||0)+(bd.gp||0);
+      return{a,bd,tot};
+    }).filter(x=>x.tot>0).sort((x,y)=>y.tot-x.tot);
 
-  if(allDays.length===0){
-    t2+=`<tr><td colspan="2" style="text-align:center;padding:40px;color:var(--text3)">Nenhum contato com data registrada</td></tr>`;
+    const thS='padding:10px 10px;color:var(--text3);font-weight:700;font-size:11px;letter-spacing:.05em;text-transform:uppercase;border-bottom:2px solid var(--border);white-space:nowrap;text-align:center';
+    const tdS='text-align:center;padding:10px 10px;font-size:13px;font-weight:700';
+    t2+=`<div style="font-size:11px;color:var(--text3);margin-bottom:8px">Contatos realizados em ${String(_rankDiaFil).padStart(2,'0')}/06 · clique em outro dia para comparar</div>`;
+    t2+='<table style="width:100%;border-collapse:collapse">';
+    t2+=`<thead><tr style="border-bottom:2px solid var(--border)">`;
+    t2+=`<th style="padding:10px 12px;text-align:left;color:var(--text3);font-weight:700;font-size:11px;letter-spacing:.05em;text-transform:uppercase;border-bottom:2px solid var(--border);white-space:nowrap;min-width:40px">#</th>`;
+    t2+=`<th style="padding:10px 12px;text-align:left;color:var(--text3);font-weight:700;font-size:11px;letter-spacing:.05em;text-transform:uppercase;border-bottom:2px solid var(--border);white-space:nowrap">GERENTE</th>`;
+    t2+=`<th style="${thS};color:#4f9dff">2 DIAS</th>`;
+    t2+=`<th style="${thS};color:#f59e0b">3 DIAS</th>`;
+    t2+=`<th style="${thS};color:#ef4444">+3 DIAS</th>`;
+    t2+=`<th style="${thS};color:#10b981">SAQUES</th>`;
+    t2+=`<th style="${thS};color:#a78bfa">CHAMADOS</th>`;
+    t2+=`<th style="${thS};color:#f97316">CASHBACK</th>`;
+    t2+=`<th style="${thS};color:#8b5cf6">TORNEIOS</th>`;
+    t2+=`<th style="${thS};color:#f43f5e">G. PERDAS</th>`;
+    t2+=`<th style="${thS};color:var(--teal)">TOTAL</th>`;
+    t2+='</tr></thead><tbody>';
+
+    const totals={dep_2:0,dep_3:0,dep_3p:0,saq:0,ch:0,cb:0,tn:0,gp:0,tot:0};
+    if(dayRows.length===0){
+      t2+=`<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--text3)">Nenhum contato registrado no dia ${_rankDiaFil}</td></tr>`;
+    } else {
+      dayRows.forEach((row,i)=>{
+        const{a,bd,tot}=row;
+        const bg=i===0?'rgba(255,215,0,.04)':i===1?'rgba(192,192,192,.03)':i===2?'rgba(205,127,50,.03)':'';
+        const medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':'';
+        t2+=`<tr style="border-bottom:1px solid var(--border);background:${bg}">`;
+        t2+=`<td style="padding:10px 12px;color:var(--text3);font-weight:600;font-size:13px">${medal||i+1}</td>`;
+        t2+=`<td style="padding:10px 12px;color:var(--text);font-weight:${i===0?700:500};white-space:nowrap">${a}</td>`;
+        t2+=`<td style="${tdS};color:#4f9dff">${bd.dep_2||0}</td>`;
+        t2+=`<td style="${tdS};color:#f59e0b">${bd.dep_3||0}</td>`;
+        t2+=`<td style="${tdS};color:#ef4444">${bd.dep_3p||0}</td>`;
+        t2+=`<td style="${tdS};color:#10b981">${bd.saq||0}</td>`;
+        t2+=`<td style="${tdS};color:#a78bfa">${bd.ch||0}</td>`;
+        t2+=`<td style="${tdS};color:#f97316">${bd.cb||0}</td>`;
+        t2+=`<td style="${tdS};color:#8b5cf6">${bd.tn||0}</td>`;
+        t2+=`<td style="${tdS};color:#f43f5e">${bd.gp||0}</td>`;
+        t2+=`<td style="${tdS};color:var(--teal);font-size:15px">${tot}</td>`;
+        t2+='</tr>';
+        totals.dep_2+=(bd.dep_2||0);totals.dep_3+=(bd.dep_3||0);totals.dep_3p+=(bd.dep_3p||0);
+        totals.saq+=(bd.saq||0);totals.ch+=(bd.ch||0);totals.cb+=(bd.cb||0);
+        totals.tn+=(bd.tn||0);totals.gp+=(bd.gp||0);totals.tot+=tot;
+      });
+      t2+=`<tr style="border-top:2px solid var(--border);background:rgba(20,184,166,.04)">`;
+      t2+=`<td colspan="2" style="padding:10px 12px;color:var(--teal);font-weight:700;font-size:12px;text-transform:uppercase">TOTAL DIA ${String(_rankDiaFil).padStart(2,'0')}</td>`;
+      t2+=`<td style="${tdS};color:#4f9dff">${totals.dep_2}</td>`;
+      t2+=`<td style="${tdS};color:#f59e0b">${totals.dep_3}</td>`;
+      t2+=`<td style="${tdS};color:#ef4444">${totals.dep_3p}</td>`;
+      t2+=`<td style="${tdS};color:#10b981">${totals.saq}</td>`;
+      t2+=`<td style="${tdS};color:#a78bfa">${totals.ch}</td>`;
+      t2+=`<td style="${tdS};color:#f97316">${totals.cb}</td>`;
+      t2+=`<td style="${tdS};color:#8b5cf6">${totals.tn}</td>`;
+      t2+=`<td style="${tdS};color:#f43f5e">${totals.gp}</td>`;
+      t2+=`<td style="${tdS};color:var(--teal);font-size:15px">${totals.tot}</td>`;
+      t2+='</tr>';
+    }
+    t2+='</tbody></table>';
   }
-  t2+='</tbody></table>';
   document.getElementById('ranking-dia-tbl').innerHTML=t2;
   } catch(e) {
     const tbl=document.getElementById('ranking-tbl');
