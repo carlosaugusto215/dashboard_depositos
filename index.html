@@ -2363,7 +2363,8 @@ function importXL(ev){
             const skMensalTmp={};allSkRaw.forEach(s=>{if(!s.mes)return;const k=MY+'-'+String(s.mes).padStart(2,'0');skMensalTmp[k]=(skMensalTmp[k]||0)+s.valor;});
             SK_MENSAL=skMensalTmp;}}}
 
-      // CB: CashBack (acumulado por dia)
+      // CB: substituição total — limpa antes para que o arquivo importado seja a única fonte
+      CB=[];
       const wsCbName=wb.SheetNames.find(n=>n.toLowerCase().includes('cash'));
       if(wsCbName){const rawCb=XLSX.utils.sheet_to_json(wb.Sheets[wsCbName],{raw:true,defval:null});
         if(rawCb.length){const ks=Object.keys(rawCb[0]);
@@ -2375,8 +2376,6 @@ function importXL(ev){
               const dtRaw=cbDt?r[cbDt]:null;const dtStr=dtRaw instanceof Date?dtRaw.toLocaleDateString('pt-BR'):(typeof dtRaw==='number'&&dtRaw>40000?new Date(Math.round((dtRaw-25569)*86400000)).toLocaleDateString('pt-BR'):(dtRaw?String(dtRaw).trim():''));
               return{external_id:id,cashback:Math.round(val*100)/100,dia:d,mes,analista:an,data_cb:dtStr};
             }).filter(r=>r.external_id&&!isNaN(r.cashback));
-            // CB: substituição direta — sem acumulação, usa apenas o arquivo do dia importado
-            try{localStorage.setItem('dep_acc_cb',JSON.stringify(newCbRaw));}catch(e){}
             CB=newCbRaw.map(r=>{const dep=newDias.has(r.dia)?(depByIdDay[r.external_id]?.[r.dia]||0):0;
               return{...r,dep_dia:Math.round(dep*100)/100,ltv:Math.round((ltvM[r.external_id]||0)*100)/100,faixa:fxa(r.cashback)};});}}}
 
@@ -2396,7 +2395,8 @@ function importXL(ev){
             try{localStorage.setItem('dep_acc_ch',JSON.stringify(allCH));}catch(e){}
             CH=allCH;}}}
 
-      // TN: Torneios (substituição direta — sem acumulação)
+      // TN: substituição total — limpa antes para que o arquivo importado seja a única fonte
+      TN=[];
       const wsTnName=wb.SheetNames.find(n=>n.toLowerCase().includes('torneio'));
       if(wsTnName){const rawTn=XLSX.utils.sheet_to_json(wb.Sheets[wsTnName],{raw:true,defval:null});
         if(rawTn.length){const ks=Object.keys(rawTn[0]);
