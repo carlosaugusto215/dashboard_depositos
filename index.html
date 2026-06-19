@@ -2366,7 +2366,7 @@ function importXL(ev){
             SK_MENSAL=skMensalTmp;}}}
 
       // CB: substituição total — limpa dados, contatos locais e marcações no Sheets
-      CB=[];CONTACTS['cashback']={};_importClearedSections.add('cashback');_clearSheetsContacts('CashBack');
+      CB=[];CONTACTS['cashback']={};_addSyncBlocked('cashback');_clearSheetsContacts('CashBack');
       const wsCbName=wb.SheetNames.find(n=>n.toLowerCase().includes('cash'));
       if(wsCbName){const rawCb=XLSX.utils.sheet_to_json(wb.Sheets[wsCbName],{raw:true,defval:null});
         if(rawCb.length){const ks=Object.keys(rawCb[0]);
@@ -2398,7 +2398,7 @@ function importXL(ev){
             CH=allCH;}}}
 
       // TN: substituição total — limpa dados, contatos locais e marcações no Sheets
-      TN=[];CONTACTS['torneios']={};_importClearedSections.add('torneios');_clearSheetsContacts('Torneios');
+      TN=[];CONTACTS['torneios']={};_addSyncBlocked('torneios');_clearSheetsContacts('Torneios');
       const wsTnName=wb.SheetNames.find(n=>n.toLowerCase().includes('torneio'));
       if(wsTnName){const rawTn=XLSX.utils.sheet_to_json(wb.Sheets[wsTnName],{raw:true,defval:null});
         if(rawTn.length){const ks=Object.keys(rawTn[0]);
@@ -2598,8 +2598,12 @@ function _writeChToSheets(ticketId, feito, dataContato, obs) {
 function _getContact(section, id){ return (CONTACTS[section]||{})[String(id)]||{feito:false}; }
 function _saveContacts(){ try{localStorage.setItem('contacts_v2',JSON.stringify(CONTACTS));}catch(e){} }
 
-// Seções limpas pelo import — bloqueiam re-sync do Sheets até o gerente fazer a primeira marcação
-const _importClearedSections = new Set();
+// Seções limpas pelo import — bloqueiam re-sync do Sheets até o gerente fazer a primeira marcação.
+// Persistido no localStorage para sobreviver a refresh de página.
+function _getSyncBlocked(){try{return new Set(JSON.parse(localStorage.getItem('dep_sync_blocked')||'[]'));}catch(e){return new Set();}}
+function _addSyncBlocked(sec){const s=_getSyncBlocked();s.add(sec);try{localStorage.setItem('dep_sync_blocked',JSON.stringify([...s]));}catch(e){}}
+function _removeSyncBlocked(sec){const s=_getSyncBlocked();s.delete(sec);try{localStorage.setItem('dep_sync_blocked',JSON.stringify([...s]));}catch(e){}}
+
 
 function _clearSheetsContacts(sheetName) {
   const url = localStorage.getItem('ch_gs_url') || GS_SHEETS_URL;
@@ -2660,7 +2664,7 @@ function confirmContact(){
   const dataContato=_now.toLocaleDateString('pt-BR')+' '+_now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
   if(!CONTACTS[section])CONTACTS[section]={};
   CONTACTS[section][String(id)]={feito:true,data:dataContato,obs};
-  _importClearedSections.delete(section);
+  _removeSyncBlocked(section);
   _saveContacts();
   _writeContactToSheets(section,id,true,dataContato,obs);
   closeContactModal();
@@ -4233,7 +4237,7 @@ function _syncChFromSheets(sheetsData) {
 // Garante que feito=TRUE no Sheets é a fonte de verdade sem sobrescrever marcações locais mais recentes.
 function _syncContactSectionFromSheets(sheetsData, section) {
   if (!Array.isArray(sheetsData) || sheetsData.length === 0) return;
-  if (_importClearedSections.has(section)) return;
+  if (_getSyncBlocked().has(section)) return;
   if (!CONTACTS[section]) CONTACTS[section] = {};
   let changed = false;
   sheetsData.forEach(r => {
