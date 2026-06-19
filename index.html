@@ -2383,7 +2383,7 @@ function importXL(ev){
             SK_MENSAL=skMensalTmp;}}}
 
       // CB: substituição total — limpa dados, contatos locais e marcações no Sheets
-      CB=[];CONTACTS['cashback']={};_addSyncBlocked('cashback');_clearSheetsContacts('CashBack');
+      CB=[];CONTACTS['cashback']={};
       const wsCbName=wb.SheetNames.find(n=>n.toLowerCase().includes('cash'));
       if(wsCbName){const rawCb=XLSX.utils.sheet_to_json(wb.Sheets[wsCbName],{raw:true,defval:null});
         if(rawCb.length){const ks=Object.keys(rawCb[0]);
@@ -2415,7 +2415,7 @@ function importXL(ev){
             CH=allCH;}}}
 
       // TN: substituição total — limpa dados, contatos locais e marcações no Sheets
-      TN=[];CONTACTS['torneios']={};_addSyncBlocked('torneios');_clearSheetsContacts('Torneios');
+      TN=[];CONTACTS['torneios']={};
       const wsTnName=wb.SheetNames.find(n=>n.toLowerCase().includes('torneio'));
       if(wsTnName){const rawTn=XLSX.utils.sheet_to_json(wb.Sheets[wsTnName],{raw:true,defval:null});
         if(rawTn.length){const ks=Object.keys(rawTn[0]);
@@ -2684,7 +2684,6 @@ function confirmContact(){
   const dataContato=_now.toLocaleDateString('pt-BR')+' '+_now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
   if(!CONTACTS[section])CONTACTS[section]={};
   CONTACTS[section][String(id)]={feito:true,data:dataContato,obs};
-  _removeSyncBlocked(section);
   _saveContacts();
   _writeContactToSheets(section,id,true,dataContato,obs);
   closeContactModal();
@@ -4257,7 +4256,6 @@ function _syncChFromSheets(sheetsData) {
 // Garante que feito=TRUE no Sheets é a fonte de verdade sem sobrescrever marcações locais mais recentes.
 function _syncContactSectionFromSheets(sheetsData, section) {
   if (!Array.isArray(sheetsData) || sheetsData.length === 0) return;
-  if (_getSyncBlocked().has(section)) return;
   if (!CONTACTS[section]) CONTACTS[section] = {};
   // CB e TN são substituídos a cada import — só aplica marcações do dia atual para não re-importar marcações de períodos anteriores
   const filterByToday = section === 'cashback' || section === 'torneios';
