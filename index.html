@@ -2365,8 +2365,8 @@ function importXL(ev){
             const skMensalTmp={};allSkRaw.forEach(s=>{if(!s.mes)return;const k=MY+'-'+String(s.mes).padStart(2,'0');skMensalTmp[k]=(skMensalTmp[k]||0)+s.valor;});
             SK_MENSAL=skMensalTmp;}}}
 
-      // CB: substituição total — limpa dados e contatos para que o arquivo importado seja a única fonte
-      CB=[];CONTACTS['cashback']={};
+      // CB: substituição total — limpa antes para que o arquivo importado seja a única fonte
+      CB=[];
       const wsCbName=wb.SheetNames.find(n=>n.toLowerCase().includes('cash'));
       if(wsCbName){const rawCb=XLSX.utils.sheet_to_json(wb.Sheets[wsCbName],{raw:true,defval:null});
         if(rawCb.length){const ks=Object.keys(rawCb[0]);
@@ -2397,8 +2397,8 @@ function importXL(ev){
             try{localStorage.setItem('dep_acc_ch',JSON.stringify(allCH));}catch(e){}
             CH=allCH;}}}
 
-      // TN: substituição total — limpa dados e contatos para que o arquivo importado seja a única fonte
-      TN=[];CONTACTS['torneios']={};
+      // TN: substituição total — limpa antes para que o arquivo importado seja a única fonte
+      TN=[];
       const wsTnName=wb.SheetNames.find(n=>n.toLowerCase().includes('torneio'));
       if(wsTnName){const rawTn=XLSX.utils.sheet_to_json(wb.Sheets[wsTnName],{raw:true,defval:null});
         if(rawTn.length){const ks=Object.keys(rawTn[0]);
@@ -2448,7 +2448,6 @@ function importXL(ev){
             console.log('[APOIO] carteira:',CARTEIRA.length,'| ex:',CARTEIRA.slice(0,2));
             try{localStorage.setItem('dep_cli_names',JSON.stringify(CLI_NAMES));localStorage.setItem('dep_carteira',JSON.stringify(CARTEIRA));}catch(e){}}}}
 
-      _saveContacts();
       applyF();
       saveSnap(maxDayNum, MM);
       const diasAcc=new Set(Object.values(nAN_DEP).flatMap(days=>Object.keys(days))).size||[...new Set(freshDeps.map(r=>r.dia))].length;
