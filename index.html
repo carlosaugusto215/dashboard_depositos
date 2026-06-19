@@ -2615,7 +2615,17 @@ function _writeChToSheets(ticketId, feito, dataContato, obs) {
 }
 
 /* ── SISTEMA GENÉRICO DE CONTATOS ─────────────────────────── */
-function _getContact(section, id){ return (CONTACTS[section]||{})[String(id)]||{feito:false}; }
+function _getContact(section, id){
+  const c=(CONTACTS[section]||{})[String(id)]||{feito:false};
+  // CB e Torneios são diários: só conta como feito se a marcação for de hoje.
+  // Marcações de dias anteriores (cache antigo no localStorage) reiniciam em branco,
+  // sem apagar nada na planilha.
+  if((section==='cashback'||section==='torneios') && c.feito){
+    const hoje=new Date().toLocaleDateString('pt-BR');
+    if(!String(c.data||'').startsWith(hoje)) return {feito:false};
+  }
+  return c;
+}
 function _saveContacts(){ try{localStorage.setItem('contacts_v2',JSON.stringify(CONTACTS));}catch(e){} }
 
 // Seções limpas pelo import — bloqueiam re-sync do Sheets até o gerente fazer a primeira marcação.
