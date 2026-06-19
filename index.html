@@ -2365,8 +2365,8 @@ function importXL(ev){
             const skMensalTmp={};allSkRaw.forEach(s=>{if(!s.mes)return;const k=MY+'-'+String(s.mes).padStart(2,'0');skMensalTmp[k]=(skMensalTmp[k]||0)+s.valor;});
             SK_MENSAL=skMensalTmp;}}}
 
-      // CB: substituição total — limpa antes para que o arquivo importado seja a única fonte
-      CB=[];
+      // CB: substituição total — limpa dados, contatos locais e marcações no Sheets
+      CB=[];CONTACTS['cashback']={};_importClearedSections.add('cashback');_clearSheetsContacts('CashBack');
       const wsCbName=wb.SheetNames.find(n=>n.toLowerCase().includes('cash'));
       if(wsCbName){const rawCb=XLSX.utils.sheet_to_json(wb.Sheets[wsCbName],{raw:true,defval:null});
         if(rawCb.length){const ks=Object.keys(rawCb[0]);
@@ -2397,8 +2397,8 @@ function importXL(ev){
             try{localStorage.setItem('dep_acc_ch',JSON.stringify(allCH));}catch(e){}
             CH=allCH;}}}
 
-      // TN: substituição total — limpa antes para que o arquivo importado seja a única fonte
-      TN=[];
+      // TN: substituição total — limpa dados, contatos locais e marcações no Sheets
+      TN=[];CONTACTS['torneios']={};_importClearedSections.add('torneios');_clearSheetsContacts('Torneios');
       const wsTnName=wb.SheetNames.find(n=>n.toLowerCase().includes('torneio'));
       if(wsTnName){const rawTn=XLSX.utils.sheet_to_json(wb.Sheets[wsTnName],{raw:true,defval:null});
         if(rawTn.length){const ks=Object.keys(rawTn[0]);
@@ -2598,6 +2598,25 @@ function _writeChToSheets(ticketId, feito, dataContato, obs) {
 function _getContact(section, id){ return (CONTACTS[section]||{})[String(id)]||{feito:false}; }
 function _saveContacts(){ try{localStorage.setItem('contacts_v2',JSON.stringify(CONTACTS));}catch(e){} }
 
+// Seções limpas pelo import — bloqueiam re-sync do Sheets até o gerente fazer a primeira marcação
+const _importClearedSections = new Set();
+
+function _clearSheetsContacts(sheetName) {
+  const url = localStorage.getItem('ch_gs_url') || GS_SHEETS_URL;
+  if (!url) return;
+  _gsGetContacts(sheetName).then(data => {
+    if (!data || !data.length) return;
+    data.forEach(r => {
+      const feito = r.feito===true||r.feito==='TRUE'||r.feito==='true'||r.Feito===true||r.Feito==='TRUE';
+      if (!feito) return;
+      const id = String(r.client_id||r.external_id||r.clientId||r.externalId||'');
+      if (!id) return;
+      const p = new URLSearchParams({sheet_name:sheetName,action:'set',client_id:id,nome:cliNm(id)||'',analista:String(r.analista||''),feito:'FALSE',data_contato:'',observacao:''});
+      (new Image()).src = url + '?' + p.toString() + '&_t=' + Date.now();
+    });
+  }).catch(() => {});
+}
+
 function _chkBtn(section, id){
   const ct=_getContact(section,id);
   const cs=ct.feito?'background:#10b981;border-color:#10b981;color:#fff':'background:var(--bg3);border-color:var(--border);color:var(--text3)';
@@ -2641,6 +2660,7 @@ function confirmContact(){
   const dataContato=_now.toLocaleDateString('pt-BR')+' '+_now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
   if(!CONTACTS[section])CONTACTS[section]={};
   CONTACTS[section][String(id)]={feito:true,data:dataContato,obs};
+  _importClearedSections.delete(section);
   _saveContacts();
   _writeContactToSheets(section,id,true,dataContato,obs);
   closeContactModal();
@@ -4213,6 +4233,7 @@ function _syncChFromSheets(sheetsData) {
 // Garante que feito=TRUE no Sheets é a fonte de verdade sem sobrescrever marcações locais mais recentes.
 function _syncContactSectionFromSheets(sheetsData, section) {
   if (!Array.isArray(sheetsData) || sheetsData.length === 0) return;
+  if (_importClearedSections.has(section)) return;
   if (!CONTACTS[section]) CONTACTS[section] = {};
   let changed = false;
   sheetsData.forEach(r => {
