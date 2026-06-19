@@ -2101,6 +2101,17 @@ function loadSnap(){
     const _chMax = CH.length > 0 ? Math.max(...CH.map(t => t.dia || 1)) : 1;
     JD = Math.max(s.maxDay || 1, s.JD || 1, _chMax);
     updateDaySelects(JD, s.mm);
+    // Fallback: se o snap principal tiver CB/TN desatualizados, prefere o fallback dedicado (gravado por último)
+    try{
+      const cbt=localStorage.getItem('dep_snap_cbt');
+      if(cbt){const f=JSON.parse(cbt);
+        // Usa o fallback se o dia máximo for maior (import mais recente) que o snap
+        if(f.maxDay&&f.maxDay>=(s.maxDay||0)){
+          if(f.CB&&f.CB.length>=0)CB=f.CB;
+          if(f.TN&&f.TN.length>=0)TN=f.TN;
+        }
+      }
+    }catch(e){}
     return true;
   }catch(e){return false;}
 }
@@ -2455,11 +2466,14 @@ function importXL(ev){
             try{localStorage.setItem('dep_cli_names',JSON.stringify(CLI_NAMES));localStorage.setItem('dep_carteira',JSON.stringify(CARTEIRA));}catch(e){}}}}
 
       applyF();
-      saveSnap(maxDayNum, MM);
       const diasAcc=new Set(Object.values(nAN_DEP).flatMap(days=>Object.keys(days))).size||[...new Set(freshDeps.map(r=>r.dia))].length;
       const nNomes=Object.keys(CLI_NAMES).length;
       st.textContent='✓ '+newCL.length+' clientes · '+SK.length+' saques · '+CB.length+' cashbacks · '+CH.length+' chamados · '+diasAcc+' dias acum. · '+nNomes+' nomes · Dados: '+DD;
       st.className='imp-st ok';
+      // Salva após a mensagem de sucesso — erro de quota fica visível se ocorrer
+      saveSnap(maxDayNum, MM);
+      // Fallback dedicado para CB e TN (menor que o snap completo, mais chance de caber no localStorage)
+      try{localStorage.setItem('dep_snap_cbt',JSON.stringify({CB,TN,mm:MM,maxDay:maxDayNum}));}catch(e){}
       ev.target.value='';
     }catch(err){st.textContent='Erro: '+err.message;st.className='imp-st er';console.error(err);}
   };
