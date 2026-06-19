@@ -4245,13 +4245,19 @@ function _syncContactSectionFromSheets(sheetsData, section) {
   if (!Array.isArray(sheetsData) || sheetsData.length === 0) return;
   if (_getSyncBlocked().has(section)) return;
   if (!CONTACTS[section]) CONTACTS[section] = {};
+  // CB e TN são substituídos a cada import — só aplica marcações do dia atual para não re-importar marcações de períodos anteriores
+  const filterByToday = section === 'cashback' || section === 'torneios';
+  const today = new Date().toLocaleDateString('pt-BR');
   let changed = false;
   sheetsData.forEach(r => {
     const feito = r.feito===true||r.feito==='TRUE'||r.feito==='true'||
                   r.Feito===true||r.Feito==='TRUE'||r.Feito==='true';
-    // Aceita client_id ou external_id como campo de identificação (App Scripts podem variar)
     const id = String(r.client_id||r.external_id||r.clientId||r.externalId||'');
     if(!id) return;
+    if (filterByToday) {
+      const dc = String(r.data_contato||r.dataContato||'');
+      if (!dc.startsWith(today)) return;
+    }
     if (feito && (!CONTACTS[section][id]?.feito || !CONTACTS[section][id]?.analista)) {
       const existing = CONTACTS[section][id] || {};
       CONTACTS[section][id] = {feito:true, data:existing.data||String(r.data_contato||r.dataContato||''), obs:existing.obs||String(r.observacao||r.obs||''), analista:String(r.analista||existing.analista||'')};
