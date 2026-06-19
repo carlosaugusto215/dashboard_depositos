@@ -2054,9 +2054,16 @@ function updateDaySelects(maxDay, mm) {
 
 function saveSnap(maxDay, mm){
   try{
-    const snap={CL,YC,SK,CB,CH,TN,GP,AN_DEP,AN_NET,DEP_DIA,AJ,AM,MO,TJ,TM,AL,JD,DD,CLI_NAMES,CARTEIRA,DEP_ANO,MO_MENSAL,SK_MENSAL,maxDay,mm};
-    localStorage.setItem('dep_snap',JSON.stringify(snap));
-  }catch(e){}
+    // Excluídos do snap: DEP_ANO (hardcoded no HTML), GP/DEP_DIA/AJ/TJ (recalculados no loadSnap),
+    // CLI_NAMES/CARTEIRA (salvos em dep_cli_names/dep_carteira separadamente).
+    const snap={CL,YC,SK,CB,CH,TN,AN_DEP,AN_NET,AM,MO,TM,AL,JD,DD,MO_MENSAL,SK_MENSAL,maxDay,mm};
+    const json=JSON.stringify(snap);
+    localStorage.setItem('dep_snap',json);
+  }catch(e){
+    console.error('[SNAP] Falha ao salvar:',e.message);
+    const st=document.getElementById('imp-st');
+    if(st){st.textContent='⚠ Não foi possível salvar os dados: '+e.message+' — publique antes de fechar.';st.className='imp-st er';}
+  }
 }
 
 function loadSnap(){
@@ -2076,9 +2083,8 @@ function loadSnap(){
     AJ={};Object.entries(AN_DEP).forEach(([an,days])=>{AJ[an]=Math.round(Object.values(days).reduce((s,v)=>s+v,0)*100)/100;});
     TJ=Math.round(Object.values(AJ).reduce((s,v)=>s+v,0)*100)/100;
     AL.sort((a,b)=>(AJ[b]||0)-(AJ[a]||0));
-    if(s.CLI_NAMES)CLI_NAMES=s.CLI_NAMES;
-    if(s.CARTEIRA)CARTEIRA=s.CARTEIRA;
-    if(s.DEP_ANO)DEP_ANO=s.DEP_ANO;
+    try{const cn=localStorage.getItem('dep_cli_names');if(cn)CLI_NAMES=JSON.parse(cn);}catch(e){}
+    try{const ca=localStorage.getItem('dep_carteira');if(ca)CARTEIRA=JSON.parse(ca);}catch(e){}
     // curMm: mês atual do snap
     curMm=s.mm||6;
     // SK: mescla snap (dias recentes importados) sobre hardcoded (histórico completo Jan-Jun)
