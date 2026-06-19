@@ -1247,6 +1247,8 @@ function applyF(){
   renderChamados();
   renderSaques();
   renderGrandesPerdas();
+  if(document.getElementById('pg-cashback').classList.contains('on'))renderCashback();
+  if(document.getElementById('pg-torneios').classList.contains('on'))renderTorneios();
 }
 /* ATIVOS ONTEM */
 let yestPg=1, yestAn='', yestClass='';
