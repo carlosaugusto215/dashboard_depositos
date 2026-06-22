@@ -1477,18 +1477,18 @@ function confirmDepContato(){
 function _writeDepToSheets(clientId,feito,dataContato,obs,client){
   const url=localStorage.getItem('ch_gs_url')||GS_SHEETS_URL;
   if(!url)return;
-  // Chave composta 'client_id|DD/MM' → 1 linha por cliente+dia, preservando o
-  // histórico (o upsert do Apps Script é por client_id, então a chave do dia é única).
-  const _hojeDM=new Date().toLocaleDateString('pt-BR').slice(0,5); // "DD/MM"
-  const _compositeId=String(clientId)+'|'+_hojeDM;
+  // Sem coluna nova: o upsert (Apps Script) usa client_id + a DATA (dia) de data_contato
+  // → 1 linha por cliente por dia, preservando o histórico. Ao desmarcar (data_contato
+  // vazio) usamos a data de hoje para acertar a linha do dia atual.
+  const _dc = dataContato || new Date().toLocaleDateString('pt-BR'); // "DD/MM/AAAA"
   const p=new URLSearchParams({
     sheet_name:'Depositos',action:'set',
-    client_id:_compositeId, nome:cliNm(clientId),
+    client_id:String(clientId), nome:cliNm(clientId),
     analista:client?client.analista:'',
     dias_sem_dep:client?client.dias_sem_dep:'',
     categoria:client?client.categoria.replace('+','>'):''  ,
     feito:feito?'TRUE':'FALSE',
-    data_contato:dataContato, observacao:obs
+    data_contato:_dc, observacao:obs
   });
   (new Image()).src=url+'?'+p.toString()+'&_t='+Date.now();
 }
@@ -2489,7 +2489,10 @@ function importXL(ev){
 /* ── CHAMADOS ──────────────────────────── */
 let chDay = null, chPg = 1;
 const CH_PS = 15;
-const GS_SHEETS_URL = 'https://script.google.com/macros/s/AKfycbzUpEl_SuLXDOp8AlL5KdE5SuEAF4xwmxzAQqzG6mZ9VBZaGaCN1avANxPmiQq1NlXxUg/exec';
+const GS_SHEETS_URL = 'https://script.google.com/macros/s/AKfycbyDaJavGcm9Mu0SSq9TxStbazyGMs4eui8B14z5jLuLsZg3DcQcxnB5vr2Zotsog_Na7Q/exec';
+// Migração: a implantação ANTIGA do Apps Script (URL abaixo) roda código velho (upsert por
+// client_id sem dia). Se algum navegador tiver essa URL salva, limpa p/ cair no GS_SHEETS_URL novo.
+try{ if(localStorage.getItem('ch_gs_url')==='https://script.google.com/macros/s/AKfycbzUpEl_SuLXDOp8AlL5KdE5SuEAF4xwmxzAQqzG6mZ9VBZaGaCN1avANxPmiQq1NlXxUg/exec') localStorage.removeItem('ch_gs_url'); }catch(e){}
 let CH_CONTACTS = {};   // {ticket_id: {feito:bool, data:string, obs:string}}
 let chContatoFilter = 'all'; // 'all'|'pendente'|'feito'
 let _chModalTicketId = null;
@@ -4307,8 +4310,7 @@ function _syncContactSectionFromSheets(sheetsData, section) {
 function _syncDepContactsFromSheets(sheetsData) {
   if (!Array.isArray(sheetsData) || sheetsData.length === 0) return;
   // Reset diário: só carrega para a tela as marcações DE HOJE. As linhas dos dias
-  // anteriores (chave 'id|DD/MM' antiga ou data_contato de outro dia) ficam na
-  // planilha como histórico, mas não reaparecem marcadas hoje.
+  // anteriores ficam na planilha como histórico, mas não reaparecem marcadas hoje.
   const hojeDM = new Date().toLocaleDateString('pt-BR').slice(0,5); // "DD/MM"
   let changed = false;
   sheetsData.forEach(r => {
@@ -4317,13 +4319,13 @@ function _syncDepContactsFromSheets(sheetsData) {
     if(!feito) return;
     const rawId = String(r.client_id||r.external_id||r.clientId||r.externalId||'');
     if(!rawId) return;
-    // Separa a chave composta 'id|DD/MM' do client_id puro.
+    // Tolera linhas antigas no formato 'id|DD/MM' (deploy anterior) — separa o id puro.
     const pipe = rawId.indexOf('|');
     const id = pipe>-1 ? rawId.slice(0,pipe) : rawId;
-    const diaKey = pipe>-1 ? rawId.slice(pipe+1) : '';
+    const diaComposta = pipe>-1 ? rawId.slice(pipe+1) : '';
     const data = String(r.data_contato||r.dataContato||'');
-    // Dia do registro: sufixo da chave composta tem prioridade; senão usa o data_contato.
-    const diaRegistro = (diaKey || data).slice(0,5);
+    // Dia do registro: data_contato (formato vigente) > sufixo composto antigo > coluna dia.
+    const diaRegistro = (data || diaComposta || String(r.dia||'')).slice(0,5);
     if(diaRegistro !== hojeDM) return; // ignora dias anteriores → começa em branco
     if (!DEP_CONTACTS[id]?.feito || !DEP_CONTACTS[id]?.analista) {
       const existing = DEP_CONTACTS[id] || {};
