@@ -1404,7 +1404,7 @@ function renderDL(){
   const r=q?dData.filter(c=>c.external_id.includes(q)):dData;
   document.getElementById('d-cnt').textContent=r.length+' cliente(s)';
   document.getElementById('d-list').innerHTML=r.map(c=>{
-    const ct=DEP_CONTACTS[String(c.external_id)]||{feito:false};
+    const ct=_getDepContact(c.external_id);
     const chkStyle=ct.feito
       ?'background:#10b981;border-color:#10b981;color:#fff'
       :'background:var(--bg3);border-color:var(--border);color:var(--text3)';
@@ -1431,7 +1431,7 @@ function renderDL(){
 function _isAdmin(){try{const s=JSON.parse(localStorage.getItem('dep_session')||'{}');return s.role==='admin';}catch(e){return false;}}
 
 function toggleDepContato(clientId){
-  const cur=DEP_CONTACTS[String(clientId)]||{feito:false};
+  const cur=_getDepContact(clientId);
   if(cur.feito){
     if(!_isAdmin()){alert('Apenas o administrador pode desmarcar um contato.');return;}
     DEP_CONTACTS[String(clientId)]={feito:false,data:'',obs:''};
@@ -1448,7 +1448,7 @@ function openDepModal(clientId){
   if(!client)return;
   _depModalClientId=clientId;
   _depModalClient=client;
-  const cur=DEP_CONTACTS[String(clientId)]||{};
+  const cur=_getDepContact(clientId);
   document.getElementById('dep-obs-info').innerHTML=
     `<strong>${cliNm(clientId)}</strong> &nbsp;·&nbsp; ${client.analista}<br>`+
     `<span style="color:var(--text2)">${client.categoria} · ${client.dias_sem_dep} dias sem dep.</span>`;
@@ -1477,9 +1477,13 @@ function confirmDepContato(){
 function _writeDepToSheets(clientId,feito,dataContato,obs,client){
   const url=localStorage.getItem('ch_gs_url')||GS_SHEETS_URL;
   if(!url)return;
+  // Chave composta 'client_id|DD/MM' → 1 linha por cliente+dia, preservando o
+  // histórico (o upsert do Apps Script é por client_id, então a chave do dia é única).
+  const _hojeDM=new Date().toLocaleDateString('pt-BR').slice(0,5); // "DD/MM"
+  const _compositeId=String(clientId)+'|'+_hojeDM;
   const p=new URLSearchParams({
     sheet_name:'Depositos',action:'set',
-    client_id:clientId, nome:cliNm(clientId),
+    client_id:_compositeId, nome:cliNm(clientId),
     analista:client?client.analista:'',
     dias_sem_dep:client?client.dias_sem_dep:'',
     categoria:client?client.categoria.replace('+','>'):''  ,
@@ -2621,6 +2625,17 @@ function _getContact(section, id){
   // Marcações de dias anteriores (cache antigo no localStorage) reiniciam em branco,
   // sem apagar nada na planilha.
   if((section==='cashback'||section==='torneios') && c.feito){
+    const hoje=new Date().toLocaleDateString('pt-BR');
+    if(!String(c.data||'').startsWith(hoje)) return {feito:false};
+  }
+  return c;
+}
+// Depósitos são diários (mesma lógica de CB/Torneios): só conta como feito se a
+// marcação for de hoje. Marcações de dias anteriores reiniciam em branco na tela,
+// sem apagar nada na planilha (o histórico por dia fica nas linhas 'id|DD/MM').
+function _getDepContact(id){
+  const c=DEP_CONTACTS[String(id)]||{feito:false};
+  if(c.feito){
     const hoje=new Date().toLocaleDateString('pt-BR');
     if(!String(c.data||'').startsWith(hoje)) return {feito:false};
   }
@@ -4291,17 +4306,30 @@ function _syncContactSectionFromSheets(sheetsData, section) {
 
 function _syncDepContactsFromSheets(sheetsData) {
   if (!Array.isArray(sheetsData) || sheetsData.length === 0) return;
+  // Reset diário: só carrega para a tela as marcações DE HOJE. As linhas dos dias
+  // anteriores (chave 'id|DD/MM' antiga ou data_contato de outro dia) ficam na
+  // planilha como histórico, mas não reaparecem marcadas hoje.
+  const hojeDM = new Date().toLocaleDateString('pt-BR').slice(0,5); // "DD/MM"
   let changed = false;
   sheetsData.forEach(r => {
     const feito = r.feito===true||r.feito==='TRUE'||r.feito==='true'||
                   r.Feito===true||r.Feito==='TRUE'||r.Feito==='true';
-    const id = String(r.client_id||r.external_id||r.clientId||r.externalId||'');
-    if(!id) return;
-    if (feito && (!DEP_CONTACTS[id]?.feito || !DEP_CONTACTS[id]?.analista)) {
+    if(!feito) return;
+    const rawId = String(r.client_id||r.external_id||r.clientId||r.externalId||'');
+    if(!rawId) return;
+    // Separa a chave composta 'id|DD/MM' do client_id puro.
+    const pipe = rawId.indexOf('|');
+    const id = pipe>-1 ? rawId.slice(0,pipe) : rawId;
+    const diaKey = pipe>-1 ? rawId.slice(pipe+1) : '';
+    const data = String(r.data_contato||r.dataContato||'');
+    // Dia do registro: sufixo da chave composta tem prioridade; senão usa o data_contato.
+    const diaRegistro = (diaKey || data).slice(0,5);
+    if(diaRegistro !== hojeDM) return; // ignora dias anteriores → começa em branco
+    if (!DEP_CONTACTS[id]?.feito || !DEP_CONTACTS[id]?.analista) {
       const existing = DEP_CONTACTS[id] || {};
       DEP_CONTACTS[id] = {
         feito: true,
-        data: existing.data || String(r.data_contato||r.dataContato||''),
+        data: existing.data || data,
         obs: existing.obs || String(r.observacao||r.obs||''),
         analista: String(r.analista||existing.analista||''),
         categoria: String(r.categoria||'').replace('>','+')||existing.categoria||'+3 dias'
@@ -4787,7 +4815,7 @@ function _buildIndDep() {
     const cat = c.categoria;
     if (!byAnCat[a] || !byAnCat[a][cat]) return;
     byAnCat[a][cat].total++;
-    if (DEP_CONTACTS[String(c.external_id)] && DEP_CONTACTS[String(c.external_id)].feito) {
+    if (_getDepContact(c.external_id).feito) {
       byAnCat[a][cat].feito++;
     }
   });
