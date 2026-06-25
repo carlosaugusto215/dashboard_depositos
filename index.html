@@ -2412,13 +2412,17 @@ function importXL(ev){
             SK_MENSAL=skMensalTmp;}}}
 
       // CB: substituição total apenas se a aba existir no arquivo — sem aba, mantém dados anteriores
+      let cbStatusMsg='';
       const wsCbName=wb.SheetNames.find(n=>n.toLowerCase().includes('cash'));
       if(wsCbName){
       const rawCb=XLSX.utils.sheet_to_json(wb.Sheets[wsCbName],{raw:true,defval:null});
         if(rawCb.length){const ks=Object.keys(rawCb[0]);
           const[cbId,cbV,cbDia,cbMes,cbAn,cbDt]=[fPri(ks,'external_id','id cliente','id_cliente','id'),fPri(ks,'cashback','vlr cashback','valor cashback','vlr cb','valor cb','cb'),fPri(ks,'dia','day'),fPri(ks,'mês','mes','month'),fPri(ks,'responsav','analista','vip','gerente'),fPri(ks,'data','date','dt')];
           const fxa=v=>v>=1000?'+1k':v>=500?'500–1k':v>=100?'100–500':v>=50?'50–100':v>=10?'10–50':'0–10';
-          if(!cbId||!cbV||!cbAn)console.warn('[CB] coluna não encontrada — cbId:',cbId,'cbV:',cbV,'cbAn:',cbAn,'colunas:',ks);
+          if(!cbId||!cbV||!cbAn){
+            console.warn('[CB] coluna não encontrada — cbId:',cbId,'cbV:',cbV,'cbAn:',cbAn,'colunas:',ks);
+            cbStatusMsg=` ⚠ CB não importado (colunas no arquivo: ${ks.join(', ')})`;
+          }
           if(cbId&&cbV&&cbAn){
             CB=[];CONTACTS['cashback']={};
             const newCbRaw=rawCb.map(r=>{const id=String(r[cbId]||'').trim(),val=parseFloat(String(r[cbV]||'0').replace(',','.'));
@@ -2499,7 +2503,7 @@ function importXL(ev){
       applyF();
       const diasAcc=new Set(Object.values(nAN_DEP).flatMap(days=>Object.keys(days))).size||[...new Set(freshDeps.map(r=>r.dia))].length;
       const nNomes=Object.keys(CLI_NAMES).length;
-      st.textContent='✓ '+newCL.length+' clientes · '+SK.length+' saques · '+CB.length+' cashbacks · '+CH.length+' chamados · '+diasAcc+' dias acum. · '+nNomes+' nomes · Dados: '+DD;
+      st.textContent='✓ '+newCL.length+' clientes · '+SK.length+' saques · '+CB.length+' cashbacks · '+CH.length+' chamados · '+diasAcc+' dias acum. · '+nNomes+' nomes · Dados: '+DD+cbStatusMsg;
       st.className='imp-st ok';
       // Salva após a mensagem de sucesso — erro de quota fica visível se ocorrer
       saveSnap(maxDayNum, MM);
