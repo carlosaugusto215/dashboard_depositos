@@ -2075,7 +2075,7 @@ function loadSnap(){
     const raw=localStorage.getItem('dep_snap');
     if(!raw)return false;
     const s=JSON.parse(raw);
-    CL=s.CL;YC=s.YC;CB=s.CB;CH=s.CH||[];TN=s.TN;
+    CL=(s.CL||[]).map(c=>c.analista==='Priscila Borges de Oliveira'?{...c,analista:'Ananda Soares'}:c);YC=s.YC;CB=s.CB;CH=s.CH||[];TN=s.TN;
     // Mescla tickets do hardcoded (CH_INIT) que não estão no snap — garante que novos dias aparecem
     if(CH_INIT&&CH_INIT.length>0){const snapTkts=new Set(CH.map(t=>t.ticket_id));const miss=CH_INIT.filter(t=>!snapTkts.has(t.ticket_id));if(miss.length)CH=[...CH,...miss];}
     AN_NET=s.AN_NET;
@@ -2086,10 +2086,9 @@ function loadSnap(){
     // AJ/TJ: calculados do AN_DEP hardcoded — fonte única de verdade
     AJ={};Object.entries(AN_DEP).forEach(([an,days])=>{AJ[an]=Math.round(Object.values(days).reduce((s,v)=>s+v,0)*100)/100;});
     TJ=Math.round(Object.values(AJ).reduce((s,v)=>s+v,0)*100)/100;
-    // Limpa AL: remove Priscila (analista inativa), desduplicata e ordena por AJ
-    AL=AL.filter(a=>a!=='Priscila Borges de Oliveira');
-    AL=[...new Set(AL)];
-    AL.sort((a,b)=>(AJ[b]||0)-(AJ[a]||0));
+    // AL: sempre reconstruído das chaves do AJ (derivado do AN_DEP hardcoded)
+    // garante que analistas novos/renomeados apareçam mesmo com snap antigo
+    AL=Object.keys(AJ).sort((a,b)=>(AJ[b]||0)-(AJ[a]||0));
     try{const cn=localStorage.getItem('dep_cli_names');if(cn)CLI_NAMES=JSON.parse(cn);}catch(e){}
     try{const ca=localStorage.getItem('dep_carteira');if(ca)CARTEIRA=JSON.parse(ca);}catch(e){}
     // curMm: mês atual do snap
