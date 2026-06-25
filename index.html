@@ -2058,9 +2058,10 @@ function updateDaySelects(maxDay, mm) {
 
 function saveSnap(maxDay, mm){
   try{
-    // Excluídos do snap: DEP_ANO (hardcoded no HTML), GP/DEP_DIA/AJ/TJ (recalculados no loadSnap),
-    // CLI_NAMES/CARTEIRA (salvos em dep_cli_names/dep_carteira separadamente).
-    const snap={CL,YC,SK,CB,CH,TN,AN_DEP,AN_NET,AM,MO,TM,AL,JD,DD,MO_MENSAL,SK_MENSAL,maxDay,mm};
+    // Excluídos do snap: DEP_ANO (hardcoded), AN_DEP (hardcoded, rebuilt in loadSnap),
+    // GP/DEP_DIA/AJ/TJ (recalculados), CLI_NAMES/CARTEIRA (salvos separadamente),
+    // SK (salvo em dep_snap_sk para não estourar quota do snap principal).
+    const snap={CL,YC,CB,CH,TN,AN_NET,AM,MO,TM,AL,JD,DD,MO_MENSAL,SK_MENSAL,maxDay,mm};
     const json=JSON.stringify(snap);
     localStorage.setItem('dep_snap',json);
   }catch(e){
@@ -2068,6 +2069,8 @@ function saveSnap(maxDay, mm){
     const st=document.getElementById('imp-st');
     if(st){st.textContent='⚠ Não foi possível salvar os dados: '+e.message+' — publique antes de fechar.';st.className='imp-st er';}
   }
+  // SK em chave dedicada — mantém dep_snap menor para não estourar os 5MB
+  try{localStorage.setItem('dep_snap_sk',JSON.stringify({SK,mm,maxDay}));}catch(e){console.warn('[SNAP] dep_snap_sk quota:',e.message);}
 }
 
 function loadSnap(){
@@ -2093,8 +2096,13 @@ function loadSnap(){
     try{const ca=localStorage.getItem('dep_carteira');if(ca)CARTEIRA=JSON.parse(ca);}catch(e){}
     // curMm: mês atual do snap
     curMm=s.mm||6;
-    // SK: mescla snap (dias recentes importados) sobre hardcoded (histórico completo Jan-Jun)
-    if(s.SK&&s.SK.length>0){const smm=s.mm||6;const snapSkKeys=new Set(s.SK.map(sk=>sk.external_id+'|'+sk.dia+'|'+(sk.mes||smm)));SK=[...SK.filter(sk=>!snapSkKeys.has(sk.external_id+'|'+sk.dia+'|'+(sk.mes||smm))),...s.SK];}
+    // SK: carrega de dep_snap_sk (chave dedicada) ou legado (s.SK), mescla sobre hardcoded
+    try{
+      const skRaw=localStorage.getItem('dep_snap_sk');
+      const skSnap=skRaw?JSON.parse(skRaw):null;
+      const skArr=(skSnap&&skSnap.SK&&skSnap.SK.length>0)?skSnap.SK:(s.SK&&s.SK.length>0?s.SK:null);
+      if(skArr){const smm=(skSnap?skSnap.mm:s.mm)||6;const snapSkKeys=new Set(skArr.map(sk=>sk.external_id+'|'+sk.dia+'|'+(sk.mes||smm)));SK=[...SK.filter(sk=>!snapSkKeys.has(sk.external_id+'|'+sk.dia+'|'+(sk.mes||smm))),...skArr];}
+    }catch(e){}
     // GP: recalcula do SK do mês atual apenas
     const ltvM={};if(CL&&CL.length>0)CL.forEach(c=>{ltvM[String(c.external_id)]=c.ltv||0;});
     GP=SK.filter(sk=>(sk.mes||curMm)===curMm).map(sk=>({external_id:sk.external_id,dia:sk.dia,dep:sk.dep_dia,saque:sk.valor,net:Math.round((sk.dep_dia-sk.valor)*100)/100,analista:sk.analista,ltv:Math.round((ltvM[sk.external_id]||0)*100)/100})).sort((a,b)=>a.net-b.net);
@@ -2129,6 +2137,8 @@ function limparAcc(){
   localStorage.removeItem('dep_acc_cliM');
   localStorage.removeItem('dep_acc_month');
   localStorage.removeItem('dep_snap');
+  localStorage.removeItem('dep_snap_sk');
+  localStorage.removeItem('dep_snap_cbt');
   document.getElementById('imp-st').textContent='Acumulado limpo.';
 }
 
