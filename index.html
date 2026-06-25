@@ -2417,7 +2417,7 @@ function importXL(ev){
       if(wsCbName){
       const rawCb=XLSX.utils.sheet_to_json(wb.Sheets[wsCbName],{raw:true,defval:null});
         if(rawCb.length){const ks=Object.keys(rawCb[0]);
-          const[cbId,cbV,cbDia,cbMes,cbAn,cbDt]=[fPri(ks,'external_id','id cliente','id_cliente','id'),fPri(ks,'cashback','vlr cashback','valor cashback','vlr cb','valor cb','cb'),fPri(ks,'dia','day'),fPri(ks,'mês','mes','month'),fPri(ks,'responsav','analista','vip','gerente'),fPri(ks,'data','date','dt')];
+          const[cbId,cbV,cbDia,cbMes,cbAn,cbDt]=[fPri(ks,'external_id','id cliente','id_cliente','id'),fPri(ks,'cashback','vlr cashback','valor cashback','vlr cb','valor cb','cb'),fPri(ks,'dia','day'),fPri(ks,'mês','mes','month'),fPri(ks,'responsav','resposanv','respon','analista','vip','gerente'),fPri(ks,'data','date','dt')];
           const fxa=v=>v>=1000?'+1k':v>=500?'500–1k':v>=100?'100–500':v>=50?'50–100':v>=10?'10–50':'0–10';
           if(!cbId||!cbV||!cbAn){
             console.warn('[CB] coluna não encontrada — cbId:',cbId,'cbV:',cbV,'cbAn:',cbAn,'colunas:',ks);
@@ -2429,7 +2429,7 @@ function importXL(ev){
               const an=String(r[cbAn]||'').trim(),d=cbDia?parseInt(r[cbDia]):maxDayNum,mes=cbMes?parseInt(r[cbMes]):MM;
               const dtRaw=cbDt?r[cbDt]:null;const dtStr=dtRaw instanceof Date?dtRaw.toLocaleDateString('pt-BR'):(typeof dtRaw==='number'&&dtRaw>40000?new Date(Math.round((dtRaw-25569)*86400000)).toLocaleDateString('pt-BR'):(dtRaw?String(dtRaw).trim():''));
               return{external_id:id,cashback:Math.round(val*100)/100,dia:d,mes,analista:an,data_cb:dtStr};
-            }).filter(r=>r.external_id&&!isNaN(r.cashback));
+            }).filter(r=>r.external_id&&r.cashback>0);
             CB=newCbRaw.map(r=>{const dep=newDias.has(r.dia)?(depByIdDay[r.external_id]?.[r.dia]||0):0;
               return{...r,dep_dia:Math.round(dep*100)/100,ltv:Math.round((ltvM[r.external_id]||0)*100)/100,faixa:fxa(r.cashback)};});}}}
 
