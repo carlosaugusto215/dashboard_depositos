@@ -5424,6 +5424,28 @@ function renderRanking() {
 }
 
 function _indSetGer(v) { _indGerFilter = v; _indBuild(); }
+
+function _renameAnalista(oldName, newName) {
+  if (!oldName || !newName || oldName === newName) return;
+  [CL||[],YC||[],SK||[],CB||[],TN||[],GP||[],DEP_DIA||[]].forEach(arr=>arr.forEach(c=>{if(c.analista===oldName)c.analista=newName;}));
+  (CH||[]).forEach(c=>{if(c.gerente===oldName)c.gerente=newName;});
+  if(AN_DEP&&AN_DEP[oldName]){if(!AN_DEP[newName])AN_DEP[newName]={};Object.entries(AN_DEP[oldName]).forEach(([d,v])=>{AN_DEP[newName][d]=(AN_DEP[newName][d]||0)+v;});delete AN_DEP[oldName];}
+  if(AN_NET&&AN_NET[oldName]){if(!AN_NET[newName])AN_NET[newName]={};Object.entries(AN_NET[oldName]).forEach(([d,v])=>{AN_NET[newName][d]=(AN_NET[newName][d]||0)+v;});delete AN_NET[oldName];}
+  if(AJ&&AJ[oldName]!==undefined){AJ[newName]=(AJ[newName]||0)+AJ[oldName];delete AJ[oldName];}
+  if(AL){const i=AL.indexOf(oldName);if(i>=0){if(!AL.includes(newName))AL[i]=newName;else AL.splice(i,1);}else if(!AL.includes(newName))AL.push(newName);}
+  Object.values(CONTACTS||{}).forEach(sec=>Object.values(sec).forEach(ct=>{if(ct.analista===oldName)ct.analista=newName;}));
+  Object.values(DEP_CONTACTS||{}).forEach(dc=>{if(dc.analista===oldName)dc.analista=newName;});
+  _saveContacts();
+  try{localStorage.setItem('dep_contacts',JSON.stringify(DEP_CONTACTS));}catch(e){}
+  try{localStorage.setItem('dep_acc_ch',JSON.stringify(CH));}catch(e){}
+  saveSnap(JD,curMm);
+  try{localStorage.setItem('dep_snap_cbt',JSON.stringify({CB,TN,mm:curMm,maxDay:JD}));}catch(e){}
+  const selAn=document.getElementById('g-an');
+  if(selAn&&AL)selAn.innerHTML='<option value="">Todos os Analistas</option>'+AL.map(a=>`<option>${a}</option>`).join('');
+  applyF();
+  console.log('[RENAME]',oldName,'→',newName,'concluído');
+}
+
 function _indClearDates() {
   document.getElementById('ind-date-de').value = '';
   document.getElementById('ind-date-ate').value = '';
@@ -5437,6 +5459,7 @@ try{const _ca=localStorage.getItem('dep_carteira');if(_ca)CARTEIRA=JSON.parse(_c
 try{const _cc=localStorage.getItem('ch_contacts');if(_cc)CH_CONTACTS=JSON.parse(_cc);}catch(e){}
 const _initMM=parseInt(DD.split('/')[1]);updateDaySelects(JD,_initMM);
 if(loadSnap()){applyF();}else{renderTB();renderOV();renderAN();renderCT();}
+if(!localStorage.getItem('dep_rename_v1')&&AL&&AL.includes('Priscila Borges de Oliveira')){_renameAnalista('Priscila Borges de Oliveira','Ananda Soares');localStorage.setItem('dep_rename_v1','1');}
 checkSession();
 document.addEventListener('keydown', e => { if(e.key==='Escape'){ closeChModal(); closeDepModal(); closeContactModal(); } });
 </script>
