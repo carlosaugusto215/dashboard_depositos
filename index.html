@@ -2366,8 +2366,8 @@ function importXL(ev){
           delete nAN_DEP['Priscila Borges de Oliveira'];
         }
       }
-      // Sempre renomeia Priscila→Ananda no CL/SK (cobre accCliM histórico, independente do Excel atual)
-      [newCL||[],newSkRaw||[]].forEach(arr=>arr.forEach(c=>{if(c.analista==='Priscila Borges de Oliveira')c.analista='Ananda Soares';}));
+      // Sempre renomeia Priscila→Ananda no CL (cobre accCliM histórico, independente do Excel atual)
+      (newCL||[]).forEach(c=>{if(c.analista==='Priscila Borges de Oliveira')c.analista='Ananda Soares';});
       AL=Object.keys(nAJ).sort((a,b)=>nAJ[b]-nAJ[a]);
       AN_DEP=nAN_DEP;DEP_DIA=nDEP_DIA;JD=maxDayNum;DD=fd(yest);
 
@@ -2397,6 +2397,7 @@ function importXL(ev){
               const key=id+'|'+d+'|'+mes;if(!skMapNew[key])skMapNew[key]={external_id:id,dia:d,mes,analista:an,valor:0,count_saque:0};
               skMapNew[key].valor+=val;skMapNew[key].count_saque+=cnt;});
             const newSkRaw=Object.values(skMapNew);
+            newSkRaw.forEach(s=>{if(s.analista==='Priscila Borges de Oliveira')s.analista='Ananda Soares';});
             const skNewDias=new Set(newSkRaw.map(s=>s.dia+'|'+s.mes));
             const savedSkRawStr=localStorage.getItem('dep_acc_sk');
             let savedSkRaw=savedSkRawStr?JSON.parse(savedSkRawStr):[];
