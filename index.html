@@ -2040,7 +2040,7 @@ function goTo(id,el){
     [['Saques','saques'],['CashBack','cashback'],['Torneios','torneios'],['GrandesPerdas','grandesperdas']].forEach(([sh,sec])=>{
       _gsGetContacts(sh).then(d=>{if(d&&d.length){_syncContactSectionFromSheets(d,sec);renderRanking();}}).catch(()=>{});
     });
-    _gsGetContacts('Depositos').then(d=>{if(d&&d.length){_syncDepContactsFromSheets(d);renderRanking();}}).catch(()=>{});
+    _gsGetContacts('Depositos').then(d=>{if(d&&d.length){_indRaw.Depositos=d;_syncDepContactsFromSheets(d);renderRanking();}}).catch(()=>{});
   }
 }
 
@@ -4432,7 +4432,7 @@ function goToInd(sec, el) {
     _gsGetContacts(_secSheet).then(d=>{if(d&&d.length)_syncContactSectionFromSheets(d,sec);}).catch(()=>{});
   }
   if(sec==='depositos'){
-    _gsGetContacts('Depositos').then(d=>{if(d&&d.length)_syncDepContactsFromSheets(d);}).catch(()=>{});
+    _gsGetContacts('Depositos').then(d=>{if(d&&d.length){_indRaw.Depositos=d;_syncDepContactsFromSheets(d);}}).catch(()=>{});
   }
 }
 
@@ -5139,30 +5139,47 @@ function renderRanking() {
     if(!D[a].byDay[day]) D[a].byDay[day]={dep_2:0,dep_3:0,dep_3p:0,saq:0,ch:0,cb:0,tn:0,gp:0};
   };
 
-  // Depósitos — 1ª passagem: DEP_CONTACTS com analista gravado pelo Sheets (cobre todos os clientes)
-  const _depCounted = new Set();
-  Object.entries(DEP_CONTACTS||{}).forEach(([id, dc]) => {
-    if(!dc.feito||!dc.analista) return;
-    const a = dc.analista; if(!D[a]) return;
-    if(_depCounted.has(id)) return;
-    _depCounted.add(id);
-    const cat = dc.categoria||'+3 dias';
-    D[a].dep[cat]=(D[a].dep[cat]||0)+1;
-    const day=parseDay(dc.data);
-    if(day){ensDay(a,day);const k=cat==='2 dias'?'dep_2':cat==='3 dias'?'dep_3':'dep_3p';D[a].byDay[day][k]++;}
-  });
-  // 2ª passagem: CL para entradas sem analista no DEP_CONTACTS (marcadas localmente antes do sync)
-  (CL||[]).forEach(c => {
-    const id=String(c.external_id);
-    if(_depCounted.has(id)) return;
-    const dc = DEP_CONTACTS[id];
-    if(!dc||!dc.feito) return;
-    const a = c.analista; if(!D[a]) return;
-    _depCounted.add(id);
-    D[a].dep[c.categoria]=(D[a].dep[c.categoria]||0)+1;
-    const day=parseDay(dc.data);
-    if(day){ensDay(a,day);const k=c.categoria==='2 dias'?'dep_2':c.categoria==='3 dias'?'dep_3':'dep_3p';D[a].byDay[day][k]++;}
-  });
+  // Depósitos — conta TODOS os contatos da planilha (1 linha por cliente POR DIA),
+  // agrupado por gerente + categoria. Fonte autoritativa: planilha Depositos (_indRaw.Depositos).
+  // Antes contava por DEP_CONTACTS (deduplicado por cliente + só o que estava na memória/hoje),
+  // o que subcontava e perdia analistas inteiros. Ver [[project-dashboard-depositos]].
+  const _depSheet = (_indRaw && Array.isArray(_indRaw.Depositos)) ? _indRaw.Depositos : null;
+  if (_depSheet && _depSheet.length) {
+    _depSheet.forEach(r => {
+      const feito = r.feito===true||String(r.feito||'').toLowerCase()==='true';
+      if(!feito) return;
+      const a = String(r.analista||''); if(!D[a]) return;
+      let cat = String(r.categoria||'').replace('>','+');
+      if(cat!=='2 dias'&&cat!=='3 dias') cat='+3 dias';
+      D[a].dep[cat]=(D[a].dep[cat]||0)+1;
+      const day=parseDay(r.data_contato);
+      if(day){ensDay(a,day);const k=cat==='2 dias'?'dep_2':cat==='3 dias'?'dep_3':'dep_3p';D[a].byDay[day][k]++;}
+    });
+  } else {
+    // Fallback (planilha ainda não carregada): método antigo por DEP_CONTACTS (deduplicado por cliente).
+    const _depCounted = new Set();
+    Object.entries(DEP_CONTACTS||{}).forEach(([id, dc]) => {
+      if(!dc.feito||!dc.analista) return;
+      const a = dc.analista; if(!D[a]) return;
+      if(_depCounted.has(id)) return;
+      _depCounted.add(id);
+      const cat = dc.categoria||'+3 dias';
+      D[a].dep[cat]=(D[a].dep[cat]||0)+1;
+      const day=parseDay(dc.data);
+      if(day){ensDay(a,day);const k=cat==='2 dias'?'dep_2':cat==='3 dias'?'dep_3':'dep_3p';D[a].byDay[day][k]++;}
+    });
+    (CL||[]).forEach(c => {
+      const id=String(c.external_id);
+      if(_depCounted.has(id)) return;
+      const dc = DEP_CONTACTS[id];
+      if(!dc||!dc.feito) return;
+      const a = c.analista; if(!D[a]) return;
+      _depCounted.add(id);
+      D[a].dep[c.categoria]=(D[a].dep[c.categoria]||0)+1;
+      const day=parseDay(dc.data);
+      if(day){ensDay(a,day);const k=c.categoria==='2 dias'?'dep_2':c.categoria==='3 dias'?'dep_3':'dep_3p';D[a].byDay[day][k]++;}
+    });
+  }
 
   // Saques — 1ª passagem: CONTACTS['saques'] com analista gravado (cobre todos os clientes contactados)
   const _skCounted=new Set();
