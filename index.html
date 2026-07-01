@@ -1249,6 +1249,7 @@ function applyF(){
   renderGrandesPerdas();
   if(document.getElementById('pg-cashback').classList.contains('on'))renderCashback();
   if(document.getElementById('pg-torneios').classList.contains('on'))renderTorneios();
+  if(document.getElementById('pg-ranking')&&document.getElementById('pg-ranking').classList.contains('on'))renderRanking();
 }
 /* ATIVOS ONTEM */
 let yestPg=1, yestAn='', yestClass='';
@@ -5113,7 +5114,9 @@ function renderRanking() {
   if(_indRaw&&_indRaw.Chamados)_syncChFromSheets(_indRaw.Chamados);
   const _sess = _indGetSession();
   const _isAdm = _sess.role === 'admin';
-  const gerF = _isAdm ? '' : (_sess.name || '');
+  // Respeita o filtro de analista do cabeçalho (g-an) para admin; não-admin fica travado
+  // no próprio nome (segurança). Vazio = "Todos os Analistas".
+  const gerF = _isAdm ? ((document.getElementById('g-an')||{}).value || '') : (_sess.name || '');
 
   // Parse "DD/MM/YYYY HH:MM" → day number para tabela por dia
   const parseDay = s => { if(!s) return null; const d=parseInt((s||'').split('/')[0]); return isNaN(d)?null:d; };
