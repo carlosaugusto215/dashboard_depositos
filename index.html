@@ -5142,6 +5142,20 @@ function renderRanking() {
     if(!D[a].byDay[day]) D[a].byDay[day]={dep_2:0,dep_3:0,dep_3p:0,saq:0,ch:0,cb:0,tn:0,gp:0};
   };
 
+  // Filtro de PERÍODO do cabeçalho (g-dia-de/ate): conta só contatos no intervalo de
+  // dias do mês atual (curMm). Sem período selecionado, conta tudo (comportamento atual).
+  const {from:_dFrom, to:_dTo} = gDia();
+  const _dateOk = (s) => {
+    if(_dFrom===null && _dTo===null) return true;
+    const p = String(s||'').split('/');
+    const day = parseInt(p[0]), mo = parseInt(p[1]);
+    if(isNaN(day)) return false;
+    if(!isNaN(mo) && mo !== curMm) return false;
+    if(_dFrom!==null && day<_dFrom) return false;
+    if(_dTo!==null && day>_dTo) return false;
+    return true;
+  };
+
   // Depósitos — conta TODOS os contatos da planilha (1 linha por cliente POR DIA),
   // agrupado por gerente + categoria. Fonte autoritativa: planilha Depositos (_indRaw.Depositos).
   // Antes contava por DEP_CONTACTS (deduplicado por cliente + só o que estava na memória/hoje),
@@ -5152,6 +5166,7 @@ function renderRanking() {
       const feito = r.feito===true||String(r.feito||'').toLowerCase()==='true';
       if(!feito) return;
       const a = String(r.analista||''); if(!D[a]) return;
+      if(!_dateOk(r.data_contato)) return;
       let cat = String(r.categoria||'').replace('>','+');
       if(cat!=='2 dias'&&cat!=='3 dias') cat='+3 dias';
       D[a].dep[cat]=(D[a].dep[cat]||0)+1;
@@ -5165,6 +5180,7 @@ function renderRanking() {
       if(!dc.feito||!dc.analista) return;
       const a = dc.analista; if(!D[a]) return;
       if(_depCounted.has(id)) return;
+      if(!_dateOk(dc.data)) return;
       _depCounted.add(id);
       const cat = dc.categoria||'+3 dias';
       D[a].dep[cat]=(D[a].dep[cat]||0)+1;
@@ -5177,6 +5193,7 @@ function renderRanking() {
       const dc = DEP_CONTACTS[id];
       if(!dc||!dc.feito) return;
       const a = c.analista; if(!D[a]) return;
+      if(!_dateOk(dc.data)) return;
       _depCounted.add(id);
       D[a].dep[c.categoria]=(D[a].dep[c.categoria]||0)+1;
       const day=parseDay(dc.data);
@@ -5190,6 +5207,7 @@ function renderRanking() {
     if(!ct.feito||!ct.analista) return;
     const a=ct.analista; if(!D[a]) return;
     if(_skCounted.has(sid)) return;
+    if(!_dateOk(ct.data)) return;
     _skCounted.add(sid);
     D[a].saques++;
     const day=parseDay(ct.data);
@@ -5202,6 +5220,7 @@ function renderRanking() {
     if(_skCounted.has(sid)) return;
     const ct = _getContact('saques', sid);
     if(!ct.feito) return;
+    if(!_dateOk(ct.data)) return;
     _skCounted.add(sid);
     D[a].saques++;
     const day=parseDay(ct.data);
@@ -5213,6 +5232,7 @@ function renderRanking() {
     const a = c.gerente; if(!D[a]) return;
     const ct = CH_CONTACTS[String(c.ticket_id)];
     if(!ct||!ct.feito) return;
+    if(!_dateOk(ct.data)) return;
     D[a].chamados++;
     const day=parseDay(ct.data);
     if(day){ensDay(a,day);D[a].byDay[day].ch++;}
@@ -5224,6 +5244,7 @@ function renderRanking() {
     if(!ct.feito||!ct.analista) return;
     const a=ct.analista; if(!D[a]) return;
     if(_cbCounted.has(sid)) return;
+    if(!_dateOk(ct.data)) return;
     _cbCounted.add(sid);
     D[a].cashback++;
     const day=parseDay(ct.data);
@@ -5236,6 +5257,7 @@ function renderRanking() {
     if(_cbCounted.has(sid)) return;
     const ct=_getContact('cashback',sid);
     if(!ct.feito) return;
+    if(!_dateOk(ct.data)) return;
     _cbCounted.add(sid);
     D[a].cashback++;
     const day=parseDay(ct.data);
@@ -5248,6 +5270,7 @@ function renderRanking() {
     if(!ct.feito||!ct.analista) return;
     const a=ct.analista; if(!D[a]) return;
     if(_tnCounted.has(sid)) return;
+    if(!_dateOk(ct.data)) return;
     _tnCounted.add(sid);
     D[a].torneios++;
     const day=parseDay(ct.data);
@@ -5260,6 +5283,7 @@ function renderRanking() {
     if(_tnCounted.has(sid)) return;
     const ct=_getContact('torneios',sid);
     if(!ct.feito) return;
+    if(!_dateOk(ct.data)) return;
     _tnCounted.add(sid);
     D[a].torneios++;
     const day=parseDay(ct.data);
@@ -5274,6 +5298,7 @@ function renderRanking() {
     if(_gpVisto.has(sid)) return;
     const ct=_getContact('grandesperdas',sid);
     if(!ct.feito) return;
+    if(!_dateOk(ct.data)) return;
     _gpVisto.add(sid);
     D[a].grandesperdas++;
     const day=parseDay(ct.data);
