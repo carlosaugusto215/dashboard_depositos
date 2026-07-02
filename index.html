@@ -1275,16 +1275,29 @@ function _lzD(s){ try{ if(typeof s==='string'&&s.slice(0,4)==='§LZ§'){ return 
 function _lsGetC(key){ const v=localStorage.getItem(key); return v==null?null:_lzD(v); }
 function _lsSetC(key,jsonStr){ localStorage.setItem(key,_lzC(jsonStr)); }
 
+// Mês efetivo do filtro: o mês da seleção do calendário (quando início e fim caem no mesmo mês);
+// sem seleção, o mês carregado (curMm). Permite consultar o mês anterior (junho) sem trocar curMm.
+function _selMes(){
+  const r=(typeof _dateRange!=='undefined')?_dateRange:null;
+  if(r&&r.from&&r.to&&r.from.m===r.to.m&&r.from.y===r.to.y) return r.from.m;
+  if(r&&r.from&&!r.to) return r.from.m;
+  return curMm;
+}
+function _selAno(){
+  const r=(typeof _dateRange!=='undefined')?_dateRange:null;
+  if(r&&r.from) return r.from.y;
+  return _calCurY();
+}
 function gDia(){
-  // Fonte única = _dateRange (datas cheias). Deriva {from,to} em DIAS do mês atual (curMm),
-  // mantendo o contrato antigo para todos os consumidores. Intervalo fora do mês atual → vazio.
+  // Fonte única = _dateRange (datas cheias). Deriva {from,to} em DIAS do mês SELECIONADO (_selMes),
+  // mantendo o contrato antigo para todos os consumidores. Intervalo fora do mês selecionado → vazio.
   if(typeof _dateRange==='undefined'||!_dateRange||(!_dateRange.from&&!_dateRange.to)) return {from:null,to:null};
-  const cY=_calCurY(), md=_daysInMonth(cY,curMm);
-  const mStart=cY*10000+curMm*100+1, mEnd=cY*10000+curMm*100+md;
+  const cY=_selAno(), sm=_selMes(), md=_daysInMonth(cY,sm);
+  const mStart=cY*10000+sm*100+1, mEnd=cY*10000+sm*100+md;
   const f=_dateRange.from?_di(_dateRange.from):-Infinity;
   const t=_dateRange.to?_di(_dateRange.to):Infinity;
   const lo=Math.max(f,mStart), hi=Math.min(t,mEnd);
-  if(lo>hi) return {from:9999,to:-1}; // seleção não toca o mês atual → sem dados diários
+  if(lo>hi) return {from:9999,to:-1}; // seleção não toca o mês selecionado → sem dados diários
   const loD=lo%100, hiD=hi%100;
   return {from: loD>1?loD:null, to: hiD<md?hiD:null};
 }
@@ -1320,10 +1333,11 @@ const _dObj=dt=>({y:dt.getFullYear(),m:dt.getMonth()+1,d:dt.getDate()});
 // do PC — a dash opera em 2026 e o relógio da máquina pode divergir (isso travava o calendário).
 const _calRefDate=()=>{const p=String(DD||'').split('/');const d=parseInt(p[0])||1,m=parseInt(p[1])||curMm,y=parseInt(p[2])||_calCurY();return new Date(y,m-1,d);};
 function _calBounds(){
-  // Só o mês dos DADOS carregados (curMm) é clicável — garante que todo dia selecionável
-  // tem dado e o filtro sempre bate com a dash. Ao importar um novo mês, curMm avança.
+  // Libera o mês carregado (curMm) E o mês anterior — permite consultar o mês fechado (ex.: junho)
+  // sem trocar o mês da dash. O filtro segue o mês da seleção (_selMes).
   const cY=_calCurY();
-  return {fromInt:cY*10000+curMm*100+1, toInt:cY*10000+curMm*100+_daysInMonth(cY,curMm)};
+  let pm=curMm-1,py=cY; if(pm<1){pm=12;py--;}
+  return {fromInt:py*10000+pm*100+1, toInt:cY*10000+curMm*100+_daysInMonth(cY,curMm)};
 }
 function dcalToggle(e){
   if(e){e.stopPropagation();}
@@ -1331,8 +1345,8 @@ function dcalToggle(e){
   if(p.style.display==='none'){
     _calTemp={from:_dateRange.from,to:_dateRange.to};
     _calActivePreset='';
-    // vista inicial: o mês dos dados (curMm) à esquerda — único clicável.
-    _calViewY=_calCurY();_calViewM=curMm;
+    // vista inicial: mês anterior à esquerda e mês carregado à direita — ambos clicáveis.
+    _calViewY=_calCurY();_calViewM=curMm-1; if(_calViewM<1){_calViewM=12;_calViewY--;}
     dcalRender();p.style.display='block';
     setTimeout(()=>document.addEventListener('click',_dcalOutside),0);
   }else{ dcalClose(); }
@@ -1386,9 +1400,11 @@ function dcalRender(){
     else ph+=`<button class="dcal-preset ${_calActivePreset===key?'on':''}" onclick="dcalPreset('${key}')">${lbl}</button>`;
   });
   ph+=`<div class="dcal-plabel">MÊS</div>`;
+  let _pmM=curMm-1; if(_pmM<1)_pmM=12;
   ph+=`<button class="dcal-preset ${_calActivePreset==='mes'+curMm?'on':''}" onclick="dcalPreset('mes${curMm}')">${_DCAL_MNF[curMm-1]} (mês todo)</button>`;
+  ph+=`<button class="dcal-preset ${_calActivePreset==='mes'+_pmM?'on':''}" onclick="dcalPreset('mes${_pmM}')">${_DCAL_MNF[_pmM-1]} (mês todo)</button>`;
   document.getElementById('dcal-presets').innerHTML=ph;
-  document.getElementById('dcal-note').textContent='O filtro atua sobre o mês carregado ('+_DCAL_MNF[curMm-1]+'). Ao importar um novo mês, o calendário avança para ele.';
+  document.getElementById('dcal-note').textContent='Selecione dias/período no mês carregado ('+_DCAL_MNF[curMm-1]+') ou no mês anterior ('+_DCAL_MNF[_pmM-1]+'). O filtro segue o mês selecionado.';
 }
 function dcalPick(y,m,d){
   _calActivePreset='';
@@ -1476,6 +1492,24 @@ const YPS=20;
 let ccPg=1;
 const CC_PS=20;
 let curMm=parseInt((DD||'').split('/')[1])||6; // deriva o mês dos DADOS publicados (DD); loadSnap/import sobrescrevem
+// ── Rótulos de mês dinâmicos (derivam de curMm) — publicarDados NÃO atualiza texto fixo, então rótulos precisam ser dinâmicos ──
+const _MESES_PT=['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+function _capFirst(s){return s?s.charAt(0).toUpperCase()+s.slice(1):s;}
+// Sem argumento, seguem o MÊS SELECIONADO no filtro (_selMes) — assim rótulos batem com os dados exibidos.
+function _mmNome(mm){return _MESES_PT[(((mm||_selMes())-1)%12+12)%12]||'';}   // "julho"
+function _mmNomeCap(mm){return _capFirst(_mmNome(mm));}                        // "Julho"
+function _mm2(mm){return String(mm||_selMes()).padStart(2,'0');}              // "07"
+// Reescreve rótulos de mês fixos no HTML estático (títulos .ct/.cs/.li e <p>) para o mês/mês-anterior atuais.
+// Mês corrente = curMm; menções a "junho" viram o mês atual e "maio" vira o mês anterior (comparações "X vs Y").
+function _applyMonthLabels(){
+  const cur=_mmNomeCap(curMm), prev=_mmNomeCap(curMm===1?12:curMm-1);
+  const rep=s=>s.replace(/Junho/g,cur).replace(/junho/g,cur.toLowerCase())
+               .replace(/Maio/g,prev).replace(/maio/g,prev.toLowerCase());
+  // Percorre nós de texto diretos (cobre também legendas .li que têm um <div> de cor + texto)
+  document.querySelectorAll('.ct,.cs,.li,p').forEach(el=>{
+    el.childNodes.forEach(n=>{ if(n.nodeType===3 && /junho|maio/i.test(n.nodeValue)) n.nodeValue=rep(n.nodeValue); });
+  });
+}
 let DEP_ANO={"3627918":2889,"7904941":0,"8844032":0,"16023829":0,"16747918":97,"19723045":1100,"46621102":299,"47802268":1300,"53855469":530,"69609479":3150,"73639212":1950,"77489233":1225,"92909759":3147,"105908955":0,"106825516":1240,"110626650":1036,"132237113":22,"133734885":783,"136026555":7076,"137449820":3500,"141622879":3560,"145297548":450,"147464831":0,"149916612":0,"150469408":348,"156244403":0,"157360282":2850,"160053362":110,"162210858":450,"165818630":0,"167290467":1000,"186447988":0,"187338699":3850,"192221678":35766,"206860938":500,"217424958":100,"219312866":200,"230674566":0,"231092035":5266,"231098011":300,"235241883":200,"244338199":200,"247004023":99600,"253347539":340,"256869376":900,"259935840":350,"262726927":23281,"269978785":70,"273239161":450,"279110148":2901,"287582025":10900,"288794557":893,"288989570":85,"313573113":0,"317691192":0,"324912209":417,"336466728":5500,"341508108":0,"343474654":181,"346689439":1475,"351520524":11700,"364283896":0,"369011301":30,"377381087":1400,"383149215":2000,"385525485":3150,"404571284":0,"417841877":1700,"419326027":100,"423281194":1033,"425187656":20,"437870653":2760,"450964534":1210,"467610127":2160,"472870741":332,"477912376":494,"480078608":2339,"483589863":419,"484305882":200,"495994197":1673,"497853109":401,"499243807":2730,"507345926":172,"508850172":0,"517317329":0,"517592465":1210,"524863773":60,"531359124":130,"536775443":7142,"542969097":7150,"544938089":500,"554419503":600,"555054603":2400,"560296795":5000,"561320746":1775,"580328163":2996,"605610658":508,"631682629":500,"632984376":500,"634209105":16340,"643952896":8000,"652553093":700,"661156105":1450,"661701625":60,"667530813":2200,"669798964":29656,"679025640":400,"682016949":0,"686015070":0,"686765824":114,"688404913":4920,"695533279":370,"702373899":13900,"702815042":0,"703472190":500,"705410751":565,"706704916":106,"713669377":200,"719825608":624,"725858088":180,"759253412":200,"773464318":1600,"777962082":880,"779539969":440,"787228374":541,"789598000":140,"798934370":1346,"806667587":2330,"817263975":100,"821716574":8630,"822873457":7200,"832484760":1574,"833385573":2540,"837811807":911,"843723604":156,"844879514":7077,"845742314":2500,"850960906":1677,"865869835":1178,"877861742":650,"878212755":137,"883683392":532,"891784989":0,"894318192":2295,"896874156":1000,"905967815":2890,"912075428":1100,"912322094":350,"924607210":64,"932528978":1000,"938303517":200,"949361258":19980,"949646989":596,"968037047":0,"983059590":130,"998236230":10,"1008157642":1064,"1016050955":340,"1021121615":1290,"1024618630":2000,"1028443310":1400,"1051209252":1400,"1057735496":281,"1061396119":2433,"1062132114":82,"1062328541":13161,"1066427085":1343,"1069674576":1300,"1086889413":100,"1091928645":171,"1095605747":804,"1095717325":1800,"1099770990":300,"1120008840":0,"1124678209":348,"1125351094":10400,"1135502855":6935,"1158153640":0,"1158823467":155,"1159859001":1412,"1161414607":2426,"1164437636":3000,"1170859276":2250,"1172653749":2400,"1173646451":0,"1180717993":500,"1187001917":596,"1189122469":2700,"1195646277":700,"1196502466":1106,"1196837553":200,"1203543864":3380,"1203821396":0,"1214246801":150,"1227670588":120,"1230685549":1200,"1232658403":170,"1238908184":0,"1262071742":1000,"1276819028":0,"1278454162":0,"1286657322":0,"1292211389":7850,"1296182106":980,"1297250538":9000,"1301511652":50,"1315957104":20000,"1326994180":52,"1329080618":0,"1355352935":0,"1369038840":50,"1375140583":1414,"1377446164":40,"1379607349":360,"1380018886":10,"1382649418":0,"1384894510":1100,"1385807680":900,"1386201074":0,"1388127773":0,"1388310625":0,"1408882626":0,"1409378211":1295,"1415030459":250,"1416302488":2500,"1425739435":4500,"1437944718":0,"1439962099":100,"1452030804":15764,"1466316147":532,"1499100495":1350,"1500646404":0,"1502242057":3319,"1505445425":26514,"1509447161":0,"1510336507":2000,"1521420342":280,"1536833524":40,"1547771171":200,"1559505953":0,"1573781015":905,"1577813416":0,"1584922716":2050,"1585497845":0,"1586698490":6300,"1587309431":1100,"1589939003":30,"1593704020":1091,"1601246110":180,"1609934982":6300,"1620685111":1050,"1630402736":5220,"1644135017":7114,"1645014556":1250,"1649332282":10,"1658035846":150,"1664207959":600,"1670202856":0,"1673866237":1644,"1677796147":0,"1688125311":500,"1690930377":162,"1697953089":2000,"1703421330":2000,"1707069248":50,"1708273400":624,"1710166205":372,"1720932459":1500,"1724451947":0,"1732379306":1928,"1736382754":44,"1797269342":1830,"1802225063":1035,"1808069640":5467,"1810154372":50,"1815546878":0,"1827157509":450,"1831175774":4300,"1839708859":500,"1840778106":2745,"1841221255":2000,"1844474955":1000,"1845125803":160,"1854271987":100,"1857457942":9000,"1860598153":79,"1870450537":443,"1873600572":19,"1874832071":0,"1893653199":1710,"1901266705":601,"1905216546":6840,"1911655005":175,"1917641643":0,"1932783231":1550,"1952569491":0,"1953619893":0,"1955667967":1000,"1957414674":824,"1959694271":800,"1963991693":100,"1974948042":0,"1984982173":915,"1987111996":560,"1990292373":60,"1993771544":50,"1995601274":0,"1999383053":122,"2001400812":200,"2008486631":985,"2036061959":1750,"2037155281":610,"2044677440":400,"2049076454":50,"2049900582":4000,"2051488679":193,"2059186758":0,"2061160997":0,"2061748963":250,"2074659249":0,"2081925931":13119,"2085067673":1680,"2091668519":780,"2093156270":35,"2093409768":0,"2099083539":465,"2101527954":2266,"2101992154":100,"2113165310":10000,"2123967519":0,"2147483989":1000,"2147500593":21000,"2147500874":9000,"2147505595":1000,"2147520129":25};
 let MO_MENSAL={"2026-07":23670128.209999986,"2026-06":23792751.429999985,"2026-01":32755028.520000014,"2026-02":25495988.250000015,"2026-03":30498612.39999999,"2026-04":34017303.519999996,"2026-05":27695870.069999967};
 let SK_MENSAL={"2026-01":32426573.740000032,"2026-02":23236445.959999964,"2026-03":28587770.75999996,"2026-04":31262521.029999997,"2026-05":24438655.329999987,"2026-06":20527207.45999998,"2026-07":648639};
@@ -1589,7 +1623,7 @@ function renderTB(){
   const p=Math.min((jv/meta)*100,100),rem=Math.max(meta-jv,0);
   const col=mc(p);
   const _maxD=_adAll.length>0?_adAll[_adAll.length-1]:10;
-  const depLabel=rangeSet?`${from??1}/06–${to??_maxD}/06`:'Dep. Junho';
+  const depLabel=rangeSet?`${from??1}/${_mm2()}–${to??_maxD}/${_mm2()}`:'Dep. '+_mmNomeCap();
   document.getElementById('tb-m').innerHTML=`
     <div class="tbp"><div class="tbl">${depLabel}</div><div class="tbv tl">${f(jv)}</div></div>
     <div class="tbp"><div class="tbl">Dep. Maio</div><div class="tbv gn">${f(mv)}</div></div>
@@ -1786,8 +1820,8 @@ function renderOV(){
     plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+c.label+': '+c.parsed}}}}});
 
   const _wkAlt=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'],_ddd=parseInt(DD.split('/')[0]);
-  const _sub2ov=(_ddd>2)?`${_wkAlt[new Date(2026,5,_ddd-2).getDay()]} ${String(_ddd-2).padStart(2,'0')}/06`:'2 dias atrás';
-  const _sub3ov=(_ddd>3)?`${_wkAlt[new Date(2026,5,_ddd-3).getDay()]} ${String(_ddd-3).padStart(2,'0')}/06`:'3 dias atrás';
+  const _sub2ov=(_ddd>2)?`${_wkAlt[new Date(2026,curMm-1,_ddd-2).getDay()]} ${String(_ddd-2).padStart(2,'0')}/${_mm2()}`:'2 dias atrás';
+  const _sub3ov=(_ddd>3)?`${_wkAlt[new Date(2026,curMm-1,_ddd-3).getDay()]} ${String(_ddd-3).padStart(2,'0')}/${_mm2()}`:'3 dias atrás';
   document.getElementById('d-pills').innerHTML=[
     {cat:'2 dias',list:d2,bg:'#1d3a8a',tc:'#93c5fd',sub:_sub2ov},
     {cat:'3 dias',list:d3,bg:'#78350f',tc:'#fde68a',sub:_sub3ov},
@@ -1839,7 +1873,7 @@ function renderOV(){
     ctx_d._c = new Chart(ctx_d,{
       type:'bar',
       data:{
-        labels: days.map(d=>`${d<10?'0'+d:d}/06 (${_wkPT[new Date(2026,5,d).getDay()]})`),
+        labels: days.map(d=>`${d<10?'0'+d:d}/${_mm2()} (${_wkPT[new Date(2026,curMm-1,d).getDay()]})`),
         datasets:[
           {label:'Depósito',data:vals,
            backgroundColor: vals.map((v,i) => {
@@ -1893,8 +1927,8 @@ function renderAN(){
     :CL;
   const con=document.getElementById('a-cards');con.innerHTML='';
   const _wkAN=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'],_ddAN=parseInt(DD.split('/')[0]);
-  const _sub2an=(_ddAN>2)?`${_wkAN[new Date(2026,5,_ddAN-2).getDay()]} ${String(_ddAN-2).padStart(2,'0')}/06`:'2 dias atrás';
-  const _sub3an=(_ddAN>3)?`${_wkAN[new Date(2026,5,_ddAN-3).getDay()]} ${String(_ddAN-3).padStart(2,'0')}/06`:'3 dias atrás';
+  const _sub2an=(_ddAN>2)?`${_wkAN[new Date(2026,curMm-1,_ddAN-2).getDay()]} ${String(_ddAN-2).padStart(2,'0')}/${_mm2()}`:'2 dias atrás';
+  const _sub3an=(_ddAN>3)?`${_wkAN[new Date(2026,curMm-1,_ddAN-3).getDay()]} ${String(_ddAN-3).padStart(2,'0')}/${_mm2()}`:'3 dias atrás';
   list.forEach((an,i)=>{
     const aD=CLp.filter(c=>c.analista===an);
     const d2=aD.filter(c=>c.categoria==='2 dias');
@@ -1929,7 +1963,7 @@ function renderAN(){
     const days=[...new Set(Object.values(AN_DEP).flatMap(o=>Object.keys(o).map(Number)))].sort((a,b)=>a-b).filter(d=>(df===null||d>=df)&&(dt===null||d<=dt));
     const PAL   = ['#00e5c0','#2563eb','#f59e0b','#ef4444','#8b5cf6','#10b981','#f97316'];
     const _wkPT2=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
-    const xlabels = days.map(d=>`${d<10?'0'+d:d} (${_wkPT2[new Date(2026,5,d).getDay()]})`);
+    const xlabels = days.map(d=>`${d<10?'0'+d:d} (${_wkPT2[new Date(2026,curMm-1,d).getDay()]})`);
 
     /* — Depósito por dia — */
     const ctx1 = document.getElementById('c-an-dep');
@@ -2050,7 +2084,7 @@ function renderCT(){
 
   const days_all = [...new Set(DEP_DIA.map(x=>x.dia))].sort((a,b)=>a-b);
   const wkDayMap = {1:'Seg',2:'Ter',3:'Qua',4:'Qui',5:'Sex',6:'Sáb',7:'Dom',8:'Seg',9:'Ter',10:'Qua',11:'Qui',12:'Sex',13:'Sáb',14:'Dom',15:'Seg'};
-  const labels_dias = days_all.map(d=>`${d<10?'0'+d:d}/06`);
+  const labels_dias = days_all.map(d=>`${d<10?'0'+d:d}/${_mm2()}`);
 
   const dep_vals = days_all.map(d=>{
     const r = DEP_DIA.find(x=>x.analista===name && x.dia===d);
@@ -2132,13 +2166,13 @@ function renderTR(){
   const months=[...new Set(MO.map(m=>m.month))].sort();
   const list=a?[a]:AL;
   const tots=months.map(mo=>Math.round(MO.filter(m=>m.month===mo&&(!a||m.analyst===a)).reduce((s,m)=>s+m.value,0)));
-  const tM=tots[months.indexOf('2026-05')]||0,tJ=tots[months.indexOf('2026-06')]||0;
+  const tM=tots[months.indexOf((curMm===1?2025:2026)+'-'+_mm2(curMm===1?12:curMm-1))]||0,tJ=tots[months.indexOf('2026-'+_mm2())]||0;
   const pJ=Math.round((tJ/JD)*MD),meta=a?MP:MT;
   const tr=((pJ-tM)/tM*100).toFixed(1);
   document.getElementById('tr-kpis').innerHTML=`
-    <div class="kc gn"><div class="kl">Maio 2026</div><div class="kv" style="color:var(--may)">${f(tM)}</div><div class="kf">mês fechado</div></div>
-    <div class="kc tl"><div class="kl">Junho (até ${DD.slice(0,5)})</div><div class="kv" style="color:var(--teal)">${f(tJ)}</div><div class="kf">excluindo hoje</div></div>
-    <div class="kc am"><div class="kl">Projeção Junho</div><div class="kv" style="color:#fbbf24">${f(pJ)}</div><div class="kb ${parseFloat(tr)>=0?'b-gn':'b-rd'}">${parseFloat(tr)>=0?'+':''}${tr}% vs Maio</div></div>`;
+    <div class="kc gn"><div class="kl">${_mmNomeCap(curMm===1?12:curMm-1)} 2026</div><div class="kv" style="color:var(--may)">${f(tM)}</div><div class="kf">mês fechado</div></div>
+    <div class="kc tl"><div class="kl">${_mmNomeCap()} (até ${DD.slice(0,5)})</div><div class="kv" style="color:var(--teal)">${f(tJ)}</div><div class="kf">excluindo hoje</div></div>
+    <div class="kc am"><div class="kl">Projeção ${_mmNomeCap()}</div><div class="kv" style="color:#fbbf24">${f(pJ)}</div><div class="kb ${parseFloat(tr)>=0?'b-gn':'b-rd'}">${parseFloat(tr)>=0?'+':''}${tr}% vs ${_mmNomeCap(curMm===1?12:curMm-1)}</div></div>`;
   const pal=['#00e5c0','#8b5cf6','#f59e0b','#ef4444','#3b82f6','#10b981'];
   const cx=document.getElementById('c-tline');
   if(cx._c)cx._c.destroy();
@@ -2181,9 +2215,9 @@ function renderCarteira(){
     <div class="kc tl"><div class="kl">Dep. 2026</div><div class="kv" style="color:var(--teal)">${f(totalDep)}</div><div class="kf">somatório junho</div></div>
     <div class="kc rd"><div class="kl">Saque 2026</div><div class="kv" style="color:#f87171">${f(totalSaque)}</div><div class="kf">somatório junho</div></div>
     <div class="kc ${totalNet>=0?'gn':'rd'}"><div class="kl">NET 2026</div><div class="kv" style="color:${totalNet>=0?'var(--ok)':'#f87171'}">${f(totalNet)}</div><div class="kf">dep − saque</div></div>`;
-  // gráficos Jan–Jun 2026 fixos
-  const MONTHS=['2026-01','2026-02','2026-03','2026-04','2026-05','2026-06'];
-  const M_LABELS=['Jan/26','Fev/26','Mar/26','Abr/26','Mai/26','Jun/26'];
+  // gráficos Jan → mês corrente (curMm) — dinâmico p/ acompanhar a virada de mês
+  const MONTHS=Array.from({length:curMm},(_,i)=>'2026-'+String(i+1).padStart(2,'0'));
+  const M_LABELS=['Jan/26','Fev/26','Mar/26','Abr/26','Mai/26','Jun/26','Jul/26','Ago/26','Set/26','Out/26','Nov/26','Dez/26'].slice(0,curMm);
   // Depósito por mês: se "Todos" usa MO_MENSAL (total bruto das rows, imune a nomes de analista)
   const depByM=MONTHS.map(m=>{
     if(!a&&Object.keys(MO_MENSAL).length>0)return Math.round(MO_MENSAL[m]||0);
@@ -2519,9 +2553,10 @@ function importXL(ev){
 
       // KPI: raw do arquivo atual para dias importados, hardcoded AN_DEP para dias históricos não cobertos
       // Isso garante que acumulado corrompido no localStorage nunca contamine os totais de depósito
-      const synRows=[];
-      if(typeof AN_DEP==='object'){Object.entries(AN_DEP).forEach(([an,days])=>{Object.entries(days).forEach(([d,total])=>{if(!newDias.has(parseInt(d)))synRows.push({id:'__s_'+an+'_'+d,date:new Date(MY,MM-1,parseInt(d)),val:total,resp:an});});});}
-      const rC_KPI=[...rC.filter(r=>newDias.has(r.date.getDate())),...synRows]; // raw para dias importados + hardcoded para histórico
+      // rC já é o ACUMULADO do mês corrente (dep_acc_deps, resetado na virada de mês) — fonte de verdade.
+      // NÃO injetamos synRows (AN_DEP hardcoded) aqui: o hardcoded pode ser de outro mês e, na virada,
+      // remapeava os dias do mês anterior como se fossem do mês atual (junho aparecendo em julho).
+      const rC_KPI=rC;
 
       // ltvM: seed do hardcoded CL/YC para preservar LTV histórico
       const ltvM={};
@@ -2538,9 +2573,12 @@ function importXL(ev){
       // Remove dias do arquivo novo e re-adiciona do raw (evita duplicata no re-import)
       newDias.forEach(d=>{Object.values(accCliM).forEach(v=>{delete v.days[String(d)];});});
       rC.filter(r=>newDias.has(r.date.getDate())).forEach(r=>{const d=String(r.date.getDate());if(!accCliM[r.id])accCliM[r.id]={resp:r.resp,seedVal:0,seedMs:0,days:{}};accCliM[r.id].days[d]=(accCliM[r.id].days[d]||0)+r.val;});
-      // Se o import cobre todos os dias 1..maxDayNum, o seedVal hardcoded já está nas days → zerar para evitar dupla contagem
+      // Se o import cobre todos os dias 1..maxDayNum, o seedVal hardcoded já está nas days → zerar para evitar dupla contagem.
+      // MAS só zera o seed de quem TEM depósito nos dias importados; quem não depositou mantém a data do
+      // último depósito (seedMs) — senão, na virada de mês (ex.: importar só o dia 01), todos os clientes
+      // "sem depositar" do mês anterior perdem a referência e a lista some.
       const allDaysCovered=Array.from({length:maxDayNum},(_,i)=>i+1).every(d=>newDias.has(d));
-      if(allDaysCovered){Object.values(accCliM).forEach(v=>{v.seedVal=0;v.seedMs=0;});}
+      if(allDaysCovered){Object.values(accCliM).forEach(v=>{if(Object.keys(v.days).length){v.seedVal=0;v.seedMs=0;}});}
       Object.values(accCliM).forEach(v=>{if(v.resp==='Priscila Borges de Oliveira')v.resp='Ananda Soares';});
       try{localStorage.setItem('dep_acc_cliM',JSON.stringify(accCliM));}catch(e){}
       // Reconstrói cliM a partir do accCliM
@@ -2849,7 +2887,7 @@ function openChModal(ticketId) {
   const cur = CH_CONTACTS[String(ticketId)] || {};
   const modal = document.getElementById('ch-obs-modal');
   document.getElementById('ch-obs-info').innerHTML =
-    `Ticket <strong>#${ticket.ticket_id}</strong> &nbsp;·&nbsp; ${ticket.gerente} &nbsp;·&nbsp; ${ticket.dia < 10 ? '0'+ticket.dia : ticket.dia}/06<br>` +
+    `Ticket <strong>#${ticket.ticket_id}</strong> &nbsp;·&nbsp; ${ticket.gerente} &nbsp;·&nbsp; ${ticket.dia < 10 ? '0'+ticket.dia : ticket.dia}/${_mm2()}<br>` +
     `<span style="color:var(--text2)">${ticket.motivo || ''}${ticket.submotivo ? ' — '+ticket.submotivo : ''}</span>`;
   document.getElementById('ch-obs-txt').value = cur.obs || '';
   modal.style.display = 'flex';
@@ -3083,7 +3121,7 @@ function renderChKPIs() {
   const topMotivo = Object.entries(byMotivo).sort((x,y) => y[1]-x[1])[0];
 
   document.getElementById('ch-kpis').innerHTML = `
-    <div class="kc tl"><div class="kl">Total de chamados</div><div class="kv" style="color:var(--teal)">${all.length}</div><div class="kf">junho 2026</div></div>
+    <div class="kc tl"><div class="kl">Total de chamados</div><div class="kv" style="color:var(--teal)">${all.length}</div><div class="kf">${_mmNomeCap()} 2026</div></div>
     <div class="kc am"><div class="kl">Dia com mais chamados</div><div class="kv" style="color:#fbbf24">${maxDay ? 'Dia ' + maxDay[0] : '—'}</div><div class="kf">${maxDay ? maxDay[1] + ' chamados' : ''}</div></div>
     <div class="kc gn"><div class="kl">Motivos distintos</div><div class="kv" style="color:var(--may)">${motivos}</div><div class="kf">categorias</div></div>
     <div class="kc rd"><div class="kl">Motivo mais comum</div><div class="kv" style="color:#f87171;font-size:15px;font-weight:600">${topMotivo ? topMotivo[0] : '—'}</div><div class="kf">${topMotivo ? topMotivo[1] + ' chamados' : ''}</div></div>
@@ -3112,7 +3150,7 @@ function renderChDayBars() {
     const bgClass = isActive ? 'background:rgba(37,99,235,.12);border-color:rgba(37,99,235,.4)' : 'background:var(--bg3);border-color:var(--border)';
     return `<div onclick="setChDay(${d})" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;border:1px solid;cursor:pointer;margin-bottom:6px;${bgClass};transition:all .15s">
       <div style="width:56px;flex-shrink:0;text-align:right">
-        <div style="font-size:12px;font-weight:700;color:${isActive?'#60a5fa':'var(--text)'}">${d < 10 ? '0'+d : d}/06</div>
+        <div style="font-size:12px;font-weight:700;color:${isActive?'#60a5fa':'var(--text)'}">${d < 10 ? '0'+d : d}/${_mm2()}</div>
         <div style="font-size:9px;color:var(--text3);margin-top:1px">${weekDayOffset[d]||''}</div>
       </div>
       <div style="flex:1;height:22px;background:var(--bg4);border-radius:4px;overflow:hidden;position:relative">
@@ -3271,7 +3309,7 @@ function renderChTbl() {
           </td>
           <td class="mo">#${c.ticket_id}</td>
           <td>${cliN(c.cliente_id)}</td>
-          <td style="color:var(--text);font-weight:600">${c.dia < 10 ? '0'+c.dia : c.dia}/06</td>
+          <td style="color:var(--text);font-weight:600">${c.dia < 10 ? '0'+c.dia : c.dia}/${_mm2()}</td>
           <td style="color:var(--text2)">${String(c.hora||0).padStart(2,'0')}h</td>
           <td>${motivoBadge(c.motivo)}</td>
           <td style="color:var(--text2);font-size:11px">${c.submotivo||''}</td>
@@ -3296,7 +3334,7 @@ const SK_PAL = ['#2563eb','#10b981','#f59e0b','#8b5cf6','#ef4444','#06b6d4'];
 function getSKFiltered() {
   const a = document.getElementById('g-an').value;
   const {from, to} = gDia();
-  let d = SK.filter(s => (s.mes||curMm)===curMm);
+  let d = SK.filter(s => (s.mes||curMm)===_selMes());
   if (a) d = d.filter(s => s.analista === a);
   if (from !== null) d = d.filter(s => s.dia >= from);
   if (to   !== null) d = d.filter(s => s.dia <= to);
@@ -3307,7 +3345,7 @@ function getSKFiltered() {
 function getSKAll() {
   const a = document.getElementById('g-an').value;
   const {from, to} = gDia();
-  let d = SK.filter(s => (s.mes||curMm)===curMm);
+  let d = SK.filter(s => (s.mes||curMm)===_selMes());
   if (a) d = d.filter(s => s.analista === a);
   if (from !== null) d = d.filter(s => s.dia >= from);
   if (to   !== null) d = d.filter(s => s.dia <= to);
@@ -3336,7 +3374,7 @@ function renderSKKPIs() {
   const netColor = net >= 0 ? '#10b981' : '#f87171';
 
   document.getElementById('sk-kpis').innerHTML = `
-    <div class="kc tl"><div class="kl">Total de saques</div><div class="kv" style="color:var(--teal)">${all.length}</div><div class="kf">${dias} dias · junho 2026</div></div>
+    <div class="kc tl"><div class="kl">Total de saques</div><div class="kv" style="color:var(--teal)">${all.length}</div><div class="kf">${dias} dias · ${_mmNomeCap()} 2026</div></div>
     <div class="kc gn"><div class="kl">Volume total</div><div class="kv" style="color:var(--may)">${f(total)}</div><div class="kf">média ${f(perDia)}/dia</div></div>
     <div class="kc rd"><div class="kl">Saques acima R$50k</div><div class="kv" style="color:#f87171;cursor:pointer" onclick="setSKFilter(document.querySelector('#sk-filter-pills .pill:last-child'),'destaque')">${big.length}</div><div class="kf">vol. ${f(bigTotal)}</div></div>
     <div class="kc" style="background:var(--bg2);border:1px solid var(--border)"><div class="kl">NET (Dep − Saque)</div><div class="kv" style="color:${netColor};font-size:18px;font-weight:600">${net>=0?'+':''}${f(net)}</div><div class="kf">dep ${f(totalDep)} · saque ${f(total)}</div></div>
@@ -3353,7 +3391,7 @@ function renderSKAlert() {
     <div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.3);border-radius:var(--r2);padding:14px 18px">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-        <span style="font-size:12.5px;font-weight:700;color:#f87171">${big.length} saque${big.length>1?'s':''} acima de R$50.000 em junho</span>
+        <span style="font-size:12.5px;font-weight:700;color:#f87171">${big.length} saque${big.length>1?'s':''} acima de R$50.000 em ${_mmNome()}</span>
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:8px">
         ${big.map(r => `
@@ -3393,7 +3431,7 @@ function renderSKDayBars() {
     const bg = isActive ? 'background:rgba(37,99,235,.1);border-color:rgba(37,99,235,.4)' : 'background:var(--bg3);border-color:var(--border)';
     return `<div onclick="setSKDay(${d})" style="${bg};display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;border:1px solid;cursor:pointer;margin-bottom:6px;transition:all .15s">
       <div style="width:58px;flex-shrink:0">
-        <div style="font-size:12px;font-weight:700;color:${isActive?'#60a5fa':'var(--text)'}">${d<10?'0'+d:d}/06</div>
+        <div style="font-size:12px;font-weight:700;color:${isActive?'#60a5fa':'var(--text)'}">${d<10?'0'+d:d}/${_mm2()}</div>
         <div style="font-size:9px;color:var(--text3)">${wkDay[d]||''}</div>
       </div>
       <div style="flex:1">
@@ -3511,7 +3549,7 @@ function renderSKVolLine() {
   ctx._c = new Chart(ctx, {
     type: 'line',
     data: {
-      labels: days.map(d => `${d<10?'0'+d:d}/06`),
+      labels: days.map(d => `${d<10?'0'+d:d}/${_mm2()}`),
       datasets: [{
         data: vals,
         borderColor: '#2563eb',
@@ -3583,7 +3621,7 @@ function renderSKTbl() {
           ${r.valor >= 49000 ? _chkBtn('saques',r.external_id) : '<td></td>'}
           <td>${cliN(r.external_id)}</td>
           <td style="font-size:11px;color:var(--text2)">${r.date}</td>
-          <td style="color:var(--text);font-weight:600">${r.dia<10?'0'+r.dia:r.dia}/06</td>
+          <td style="color:var(--text);font-weight:600">${r.dia<10?'0'+r.dia:r.dia}/${_mm2()}</td>
           <td style="text-align:right;font-weight:800;font-size:13px;color:${valColor}">${f(r.valor)}</td>
           <td style="text-align:right">
             ${r.dep_dia > 0
@@ -3625,7 +3663,7 @@ function renderSKContatoKPI() {
   const el = document.getElementById('sk-contato-kpi');
   if (!el) return;
   const gAn = (document.getElementById('g-an')||{}).value || '';
-  const all = (SK||[]).filter(r => r.mes === curMm && r.valor >= 49000 && (!gAn || r.analista === gAn));
+  const all = (SK||[]).filter(r => r.mes === _selMes() && r.valor >= 49000 && (!gAn || r.analista === gAn));
   const byAn = {};
   all.forEach(r => {
     if (!byAn[r.analista]) byAn[r.analista] = {total:0, feito:0};
@@ -3961,7 +3999,7 @@ function renderTNKPIs() {
   const topScore = allTN.reduce((m,r) => r.score > m.score ? r : m, {score:0, external_id:'—', torneio:'—'});
 
   document.getElementById('tn-kpis').innerHTML = `
-    <div class="kc tl"><div class="kl">Torneios ativos</div><div class="kv" style="color:var(--teal)">${tots}</div><div class="kf">junho 2026</div></div>
+    <div class="kc tl"><div class="kl">Torneios ativos</div><div class="kv" style="color:var(--teal)">${tots}</div><div class="kf">${_mmNomeCap()} 2026</div></div>
     <div class="kc gn"><div class="kl">Total participantes</div><div class="kv" style="color:var(--may)">${allTN.length}</div><div class="kf">${parts} únicos</div></div>
     <div class="kc am"><div class="kl">Com score ativo</div><div class="kv" style="color:#fbbf24">${ativos}</div><div class="kf">${allTN.length - ativos} com score zero</div></div>
     <div class="kc rd"><div class="kl">Maior score geral</div><div class="kv" style="color:#f87171;font-size:16px;font-weight:700">${topScore.score.toLocaleString('pt-BR')}</div><div class="kf">${cliNm(topScore.external_id)} · ${topScore.torneio}</div></div>
@@ -4155,7 +4193,11 @@ const GP_PS = 20;
 function getGPFiltered() {
   const a = document.getElementById('g-an').value;
   const {from, to} = gDia();
-  let d = GP;
+  // Reconstrói do SK do mês SELECIONADO (permite ver Grandes Perdas de junho, não só do mês carregado).
+  const sm=_selMes();
+  let d = (sm===curMm)
+    ? GP
+    : (SK||[]).filter(s=>(s.mes||curMm)===sm).map(sk=>({external_id:sk.external_id,dia:sk.dia,dep:sk.dep_dia,saque:sk.valor,net:Math.round(((sk.dep_dia||0)-sk.valor)*100)/100,analista:sk.analista,ltv:sk.ltv||0})).sort((x,y)=>x.net-y.net);
   if (a) d = d.filter(r => r.analista === a);
   if (from !== null) d = d.filter(r => r.dia >= from);
   if (to   !== null) d = d.filter(r => r.dia <= to);
@@ -4220,7 +4262,7 @@ function renderGPDayBars() {
 
     return `<div onclick="setGPDay(${d})" style="${bg};display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;border:1px solid;cursor:pointer;margin-bottom:7px;transition:all .15s">
       <div style="width:54px;flex-shrink:0">
-        <div style="font-size:12px;font-weight:700;color:${isActive?'#60a5fa':'var(--text)'}">${d<10?'0'+d:d}/06</div>
+        <div style="font-size:12px;font-weight:700;color:${isActive?'#60a5fa':'var(--text)'}">${d<10?'0'+d:d}/${_mm2()}</div>
         <div style="font-size:9px;color:var(--text3)">${wkDay[d]||''}</div>
       </div>
       <div style="flex:1">
@@ -4285,7 +4327,7 @@ function renderGPTopLosses() {
             <div style="display:flex;align-items:center;gap:7px">
               <span style="font-size:10px;font-weight:700;color:var(--text3);width:16px">${i+1}</span>
               <span style="font-size:11.5px;color:var(--text);font-weight:600">${cliNm(r.external_id)}<span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--text3);margin-left:4px">${r.external_id}</span></span>
-              <span style="font-size:10px;color:var(--text3)">dia ${r.dia}/06</span>
+              <span style="font-size:10px;color:var(--text3)">dia ${r.dia}/${_mm2()}</span>
             </div>
             <span style="font-size:13px;font-weight:800;color:${tierCol}">+${f(r.net)}</span>
           </div>
@@ -4419,7 +4461,7 @@ function renderGPTbl() {
       return `<tr style="${rowBg}">
         ${_chkBtn('grandesperdas',r.external_id)}
         <td>${cliN(r.external_id)}</td>
-        <td style="color:var(--text);font-weight:600">${r.dia<10?'0'+r.dia:r.dia}/06</td>
+        <td style="color:var(--text);font-weight:600">${r.dia<10?'0'+r.dia:r.dia}/${_mm2()}</td>
         <td style="color:var(--text2)">${r.analista}</td>
         <td style="text-align:right;color:var(--may);font-weight:600">${f(r.dep)}</td>
         <td style="text-align:right;color:#f87171;font-weight:600">${f(r.saque)}</td>
@@ -4502,6 +4544,8 @@ async function renderIndicadores() {
   [['Saques','saques'],['CashBack','cashback'],['Torneios','torneios'],['GrandesPerdas','grandesperdas']].forEach(([sh,sec])=>{
     _gsGetContacts(sh).then(d=>{if(d&&d.length)_syncContactSectionFromSheets(d,sec);}).catch(()=>{});
   });
+  // Histórico de Depósitos (planilha, 1 linha/cliente/dia) p/ o filtro de período da seção Depósitos
+  _gsGetContacts('Depositos').then(d=>{if(d&&d.length){_indRaw.Depositos=d;_syncDepContactsFromSheets(d);if(_indSection==='depositos')_buildIndDep();}}).catch(()=>{});
   // Atualiza título conforme papel do usuário
   const _s2 = _indGetSession();
   const titleEl = document.getElementById('ind-title');
@@ -4652,7 +4696,7 @@ function goToInd(sec, el) {
     _gsGetContacts(_secSheet).then(d=>{if(d&&d.length)_syncContactSectionFromSheets(d,sec);}).catch(()=>{});
   }
   if(sec==='depositos'){
-    _gsGetContacts('Depositos').then(d=>{if(d&&d.length){_indRaw.Depositos=d;_syncDepContactsFromSheets(d);}}).catch(()=>{});
+    _gsGetContacts('Depositos').then(d=>{if(d&&d.length){_indRaw.Depositos=d;_syncDepContactsFromSheets(d);if(_indSection==='depositos')_buildIndDep();}}).catch(()=>{});
   }
 }
 
@@ -5052,6 +5096,25 @@ function _buildIndDep() {
   const CATS = ['2 dias','3 dias','+3 dias'];
   const CAT_COLORS = {'2 dias':'#2563eb','3 dias':'#f59e0b','+3 dias':'#ef4444'};
 
+  // ── Filtro de período (mesmo padrão de Chamados/Saques) ──
+  const deVal = (document.getElementById('ind-date-de')||{}).value || '';
+  const ateVal = (document.getElementById('ind-date-ate')||{}).value || '';
+  const fromDate = deVal ? new Date(deVal + 'T00:00:00') : null;
+  const toDate   = ateVal ? new Date(ateVal + 'T23:59:59') : null;
+  // Um cliente conta como "feito" se tem contato de depósito com data_contato dentro
+  // do período. Sem período selecionado: mês corrente (curMm), como as demais seções.
+  const _depDateOk = raw => {
+    const d = _indParseDDMM(raw);
+    if (!d) return false;
+    if (!fromDate && !toDate) return (d.getMonth()+1) === curMm;
+    if (fromDate && d < fromDate) return false;
+    if (toDate   && d > toDate)   return false;
+    return true;
+  };
+  const periodoLabel = (fromDate||toDate)
+    ? (fromDate?fromDate.toLocaleDateString('pt-BR'):'início')+' a '+(toDate?toDate.toLocaleDateString('pt-BR'):'hoje')
+    : 'mês atual';
+
   const _sess = _indGetSession();
   const _isAdm = _sess.role === 'admin';
   const gerF = _isAdm ? _indGerFilter : (_sess.name || '');
@@ -5059,6 +5122,28 @@ function _buildIndDep() {
   const clFilt = (CL||[]).filter(c => !gerF || c.analista === gerF);
 
   const analistas = gerF ? [gerF] : [...new Set(clFilt.map(c=>c.analista))].filter(Boolean).sort();
+
+  // Contatados NO PERÍODO — fonte autoritativa: planilha Depositos (1 linha/cliente/dia).
+  // DEP_CONTACTS só guarda o dia de hoje (reset diário), por isso não serve p/ períodos passados.
+  const feitoNoPeriodo = new Set();
+  const _depSheet = (_indRaw && Array.isArray(_indRaw.Depositos)) ? _indRaw.Depositos : null;
+  if (_depSheet && _depSheet.length) {
+    _depSheet.forEach(r => {
+      const feito = r.feito===true||String(r.feito||'').toLowerCase()==='true';
+      if(!feito) return;
+      const rawId = String(r.client_id||r.external_id||r.clientId||r.externalId||'');
+      if(!rawId) return;
+      const pipe = rawId.indexOf('|');           // tolera linhas antigas 'id|DD/MM'
+      const id = pipe>-1 ? rawId.slice(0,pipe) : rawId;
+      if(!_depDateOk(r.data_contato)) return;
+      feitoNoPeriodo.add(id);
+    });
+  } else {
+    // Fallback (planilha ainda não carregada): memória local (só reflete hoje).
+    Object.entries(DEP_CONTACTS||{}).forEach(([id,dc])=>{
+      if(dc && dc.feito && _depDateOk(dc.data)) feitoNoPeriodo.add(String(id));
+    });
+  }
 
   // Estrutura: {analista: {cat: {total, feito}}}
   const byAnCat = {};
@@ -5071,7 +5156,7 @@ function _buildIndDep() {
     const cat = c.categoria;
     if (!byAnCat[a] || !byAnCat[a][cat]) return;
     byAnCat[a][cat].total++;
-    if (_getDepContact(c.external_id).feito) {
+    if (feitoNoPeriodo.has(String(c.external_id))) {
       byAnCat[a][cat].feito++;
     }
   });
@@ -5095,7 +5180,7 @@ function _buildIndDep() {
   const kpis = document.getElementById('ind-dep-kpis');
   if (kpis) {
     kpis.innerHTML =
-      `<div class="kc tl"><div class="kl">Total de Clientes</div><div class="kv">${totalGeral}</div><div class="kf">${feitoGeral} contatados</div></div>`+
+      `<div class="kc tl"><div class="kl">Total de Clientes</div><div class="kv">${totalGeral}</div><div class="kf">${feitoGeral} contatados · ${periodoLabel}</div></div>`+
       `<div class="kc gn"><div class="kl">Taxa de Contato</div><div class="kv">${taxaGeral}%</div><div class="kf">de ${totalGeral} clientes</div></div>`+
       `<div class="kc rd"><div class="kl">Pendentes</div><div class="kv">${pendGeral}</div><div class="kf">checklist desmarcado</div></div>`+
       CATS.map(cat=>{
@@ -5658,7 +5743,7 @@ function renderRanking() {
 
     const thS='padding:10px 10px;color:var(--text3);font-weight:700;font-size:11px;letter-spacing:.05em;text-transform:uppercase;border-bottom:2px solid var(--border);white-space:nowrap;text-align:center';
     const tdS='text-align:center;padding:10px 10px;font-size:13px;font-weight:700';
-    t2+=`<div style="font-size:11px;color:var(--text3);margin-bottom:8px">Contatos realizados em ${String(_rankDiaFil).padStart(2,'0')}/06 · clique em outro dia para comparar</div>`;
+    t2+=`<div style="font-size:11px;color:var(--text3);margin-bottom:8px">Contatos realizados em ${String(_rankDiaFil).padStart(2,'0')}/${_mm2()} · clique em outro dia para comparar</div>`;
     t2+='<table style="width:100%;border-collapse:collapse">';
     t2+=`<thead><tr style="border-bottom:2px solid var(--border)">`;
     t2+=`<th style="padding:10px 12px;text-align:left;color:var(--text3);font-weight:700;font-size:11px;letter-spacing:.05em;text-transform:uppercase;border-bottom:2px solid var(--border);white-space:nowrap;min-width:40px">#</th>`;
@@ -5758,6 +5843,7 @@ try{const _ca=localStorage.getItem('dep_carteira');if(_ca)CARTEIRA=JSON.parse(_c
 try{const _cc=localStorage.getItem('ch_contacts');if(_cc)CH_CONTACTS=JSON.parse(_cc);}catch(e){}
 const _initMM=parseInt(DD.split('/')[1]);updateDaySelects(JD,_initMM);
 if(loadSnap()){applyF();}else{renderTB();renderOV();renderAN();renderCT();}
+_applyMonthLabels();
 if(!localStorage.getItem('dep_rename_v1')&&AL&&AL.includes('Priscila Borges de Oliveira')){_renameAnalista('Priscila Borges de Oliveira','Ananda Soares');localStorage.setItem('dep_rename_v1','1');}
 checkSession();
 document.addEventListener('keydown', e => { if(e.key==='Escape'){ closeChModal(); closeDepModal(); closeContactModal(); } });
