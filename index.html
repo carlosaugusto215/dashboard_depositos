@@ -1307,11 +1307,15 @@ const _di=o=>o?o.y*10000+o.m*100+o.d:null;
 const _daysInMonth=(y,m)=>new Date(y,m,0).getDate();
 const _calCurY=()=>{const p=String(DD||'').split('/');const y=parseInt(p[2]);return isNaN(y)?2026:y;};
 const _dObj=dt=>({y:dt.getFullYear(),m:dt.getMonth()+1,d:dt.getDate()});
-const _calToday=()=>{const t=new Date();t.setHours(0,0,0,0);return t;};
+// Referência de "hoje" = data mais recente dos DADOS (DD do snapshot), NÃO o relógio real
+// do PC — a dash opera em 2026 e o relógio da máquina pode divergir (isso travava o calendário).
+const _calRefDate=()=>{const p=String(DD||'').split('/');const d=parseInt(p[0])||1,m=parseInt(p[1])||curMm,y=parseInt(p[2])||_calCurY();return new Date(y,m-1,d);};
 function _calBounds(){
-  const cY=_calCurY();let pm=curMm-1,py=cY;if(pm<1){pm=12;py--;}
-  const t=_dObj(_calToday());
-  return {fromInt:py*10000+pm*100+1, toInt:t.y*10000+t.m*100+t.d};
+  // Janela clicável independente do relógio: do mês anterior ao mês seguinte ao atual.
+  const cY=_calCurY();
+  let fm=curMm-1,fy=cY;if(fm<1){fm=12;fy--;}
+  let tm=curMm+1,ty=cY;if(tm>12){tm=1;ty++;}
+  return {fromInt:fy*10000+fm*100+1, toInt:ty*10000+tm*100+_daysInMonth(ty,tm)};
 }
 function dcalToggle(e){
   if(e){e.stopPropagation();}
@@ -1389,7 +1393,7 @@ function dcalPick(y,m,d){
 }
 function dcalPreset(key){
   _calActivePreset=key;
-  const t=_calToday();const mk=dt=>_dObj(dt);
+  const t=_calRefDate();const mk=dt=>_dObj(dt);
   if(key==='hoje'){_calTemp={from:mk(t),to:mk(t)};}
   else if(key==='ontem'){const y=new Date(t);y.setDate(y.getDate()-1);_calTemp={from:mk(y),to:mk(y)};}
   else if(key==='ult7'||key==='ult15'||key==='ult30'){
