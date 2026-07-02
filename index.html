@@ -1499,6 +1499,10 @@ function _capFirst(s){return s?s.charAt(0).toUpperCase()+s.slice(1):s;}
 function _mmNome(mm){return _MESES_PT[(((mm||_selMes())-1)%12+12)%12]||'';}   // "julho"
 function _mmNomeCap(mm){return _capFirst(_mmNome(mm));}                        // "Julho"
 function _mm2(mm){return String(mm||_selMes()).padStart(2,'0');}              // "07"
+// Depósitos do MÊS CARREGADO por analista, do dia 1 até o último dia COM dados (dia do DD).
+// Soma só os dias reais — imune a "dias fantasma" de outro mês deixados por conflação antiga do import.
+function _depDiaData(){return parseInt((DD||'').split('/')[0])||31;}
+function _depMesReal(an){const dd=(typeof AN_DEP!=='undefined'?AN_DEP[an]:null)||{};const lim=_depDiaData();let s=0;for(let d=1;d<=lim;d++)s+=dd[String(d)]||0;return Math.round(s);}
 // Reescreve rótulos de mês fixos no HTML estático (títulos .ct/.cs/.li e <p>) para o mês/mês-anterior atuais.
 // Mês corrente = curMm; menções a "junho" viram o mês atual e "maio" vira o mês anterior (comparações "X vs Y").
 function _applyMonthLabels(){
@@ -1752,13 +1756,9 @@ function renderOV(){
   renderTB();
   const data=gF();
   const a=document.getElementById('g-an').value;
-  const {from:ovF,to:ovT}=gDia();
-  const ovRangeSet=ovF!==null||ovT!==null;
-  const _ovAll=[...new Set(Object.values(AN_DEP).flatMap(o=>Object.keys(o).map(Number)))].sort((a,b)=>a-b);
-  const ovDays=_ovAll.filter(d=>(ovF===null||d>=ovF)&&(ovT===null||d<=ovT));
-  const jv=ovRangeSet
-    ?(a?[a]:AL).reduce((s,an)=>s+ovDays.reduce((ss,d)=>ss+(AN_DEP[an]?.[String(d)]||0),0),0)
-    :(a?Object.values(AN_DEP[a]||{}).reduce((s,v)=>s+v,0):Object.values(AN_DEP).reduce((s,days)=>s+Object.values(days).reduce((ss,v)=>ss+v,0),0));
+  // Progresso da meta = depósitos do MÊS CARREGADO (curMm), do dia 1 até o último dia COM DADOS (DD).
+  // Soma só os dias reais (1.._ddData) — exclui "dias fantasma" de outro mês que a conflação antiga do import possa ter deixado.
+  const jv=a?_depMesReal(a):(AL||[]).reduce((s,an)=>s+_depMesReal(an),0);
   const meta=a?MP:MT;
   const pct=((jv/meta)*100).toFixed(1);
   const d2=data.filter(c=>c.categoria==='2 dias');
@@ -1767,14 +1767,14 @@ function renderOV(){
 
   document.getElementById('kpi-g').innerHTML=`
     <div class="kc am"><div class="kl">Meta Mensal</div><div class="kv" style="color:#fbbf24">${f(meta)}</div><div class="kb b-am">${pct}% atingido</div></div>
-    <div class="kc tl"><div class="kl">Dep. Junho</div><div class="kv" style="color:var(--teal)">${f(jv)}</div><div class="kf">até ${DD.slice(0,5)} · excl. hoje</div></div>
-    <div class="kc gn"><div class="kl">Dep. Maio</div><div class="kv" style="color:var(--may)">${f(a?(AM[a]||0):TM)}</div><div class="kf">mês completo</div></div>
+    <div class="kc tl"><div class="kl">Dep. ${_mmNomeCap(curMm)}</div><div class="kv" style="color:var(--teal)">${f(jv)}</div><div class="kf">até ${DD.slice(0,5)} · excl. hoje</div></div>
+    <div class="kc gn"><div class="kl">Dep. ${_mmNomeCap(curMm===1?12:curMm-1)}</div><div class="kv" style="color:var(--may)">${f(a?(AM[a]||0):TM)}</div><div class="kf">mês completo</div></div>
     <div class="kc rd"><div class="kl">Clientes em Alerta</div><div class="kv" style="cursor:pointer;color:#f87171" onclick="openD('Todos em alerta','2+ dias sem depositar',gF())">${d2.length+d3.length+d3p.length}</div><div class="kb b-rd">2+ dias sem dep.</div></div>`;
 
   const al=a?[a]:AL;
   /* META BARS */
   document.getElementById('meta-b').innerHTML=al.map((an,i)=>{
-    const jn=AJ[an]||0,p=Math.min((jn/MP)*100,100),col=mc(p),rem=Math.max(MP-jn,0);
+    const jn=_depMesReal(an),p=Math.min((jn/MP)*100,100),col=mc(p),rem=Math.max(MP-jn,0);
     const medal=!a?(i===0?'🥇 ':i===1?'🥈 ':i===2?'🥉 ':''):'';
     return`<div class="mbr">
       <div class="mbt">
@@ -1840,7 +1840,7 @@ function renderOV(){
     labels:al.map(an=>an.split(' ')[0]),
     datasets:[
       {label:'Maio', data:al.map(an=>Math.round(AM[an]||0)),backgroundColor:'#059669',hoverBackgroundColor:'#10b981',borderRadius:3,borderSkipped:false},
-      {label:'Junho',data:al.map(an=>Math.round(AJ[an]||0)),backgroundColor:'#7c3aed',hoverBackgroundColor:'#8b5cf6',borderRadius:3,borderSkipped:false}
+      {label:_mmNomeCap(curMm),data:al.map(an=>_depMesReal(an)),backgroundColor:'#7c3aed',hoverBackgroundColor:'#8b5cf6',borderRadius:3,borderSkipped:false}
     ]
   },options:{responsive:true,maintainAspectRatio:false,
     scales:{x:{ticks:{color:'#7c8fa8',font:{size:11}},grid:{color:'rgba(255,255,255,.04)'}},y:{ticks:{color:'#7c8fa8',font:{size:11},callback:v=>f(v)},grid:{color:'rgba(255,255,255,.04)'}}},
@@ -1934,7 +1934,7 @@ function renderAN(){
     const d2=aD.filter(c=>c.categoria==='2 dias');
     const d3=aD.filter(c=>c.categoria==='3 dias');
     const d3p=aD.filter(c=>c.categoria==='+3 dias');
-    const jn=AJ[an]||0,p=Math.min((jn/MP)*100,100),col=mc(p);
+    const jn=_depMesReal(an),p=Math.min((jn/MP)*100,100),col=mc(p);
     const isTop=i===0&&!a;
     const div=document.createElement('div');div.className='ac';
     div.innerHTML=`
@@ -2192,7 +2192,7 @@ function renderTR(){
   if(cp._c)cp._c.destroy();
   cp._c=new Chart(cp,{type:'bar',data:{labels:AL.map(an=>an.split(' ')[0]),datasets:[
     {label:'Maio',data:AL.map(an=>Math.round(AM[an]||0)),backgroundColor:'#059669',hoverBackgroundColor:'#10b981',borderRadius:3,borderSkipped:false},
-    {label:'Jun proj.',data:AL.map(an=>Math.round(((AJ[an]||0)/JD)*MD)),backgroundColor:'#7c3aed',hoverBackgroundColor:'#8b5cf6',borderRadius:3,borderSkipped:false}
+    {label:_mmNomeCap(curMm)+' proj.',data:AL.map(an=>Math.round((_depMesReal(an)/_depDiaData())*MD)),backgroundColor:'#7c3aed',hoverBackgroundColor:'#8b5cf6',borderRadius:3,borderSkipped:false}
   ]},options:{responsive:true,maintainAspectRatio:false,
     scales:{x:{ticks:{color:'#7c8fa8',font:{size:10}},grid:{color:'rgba(255,255,255,.04)'}},y:{ticks:{color:'#7c8fa8',font:{size:10},callback:v=>f(v)},grid:{color:'rgba(255,255,255,.04)'}}},
     plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+c.dataset.label+': '+f(c.parsed.y)}}}}});
