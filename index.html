@@ -355,35 +355,89 @@ tr:last-child td{border-bottom:none}
 </aside>
 
 <!-- TOPBAR -->
+<style>
+.dcal-wrap{position:relative;flex-shrink:0}
+.dcal-trigger{display:flex;align-items:center;gap:7px;background:var(--bg3);border:1px solid var(--border);color:var(--text2);padding:6px 11px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:500;transition:all .15s;white-space:nowrap}
+.dcal-trigger:hover{border-color:var(--teal);color:var(--text)}
+.dcal-panel{position:absolute;right:0;top:calc(100% + 8px);z-index:2000;background:var(--bg2,#161b2e);border:1px solid var(--border);border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,.55);overflow:hidden;min-width:560px}
+.dcal-body{display:flex}
+.dcal-presets{display:flex;flex-direction:column;gap:2px;padding:14px 10px;border-right:1px solid var(--border);min-width:150px}
+.dcal-plabel{font-size:9px;letter-spacing:.14em;color:var(--text3);font-weight:700;padding:8px 8px 4px}
+.dcal-preset{text-align:left;background:none;border:none;color:var(--text2);padding:7px 10px;border-radius:7px;cursor:pointer;font-size:12px;transition:all .12s}
+.dcal-preset:hover{background:var(--bg3);color:var(--text)}
+.dcal-preset.on{background:rgba(0,229,192,.14);color:var(--teal);font-weight:600}
+.dcal-cals{padding:14px 16px;flex:1}
+.dcal-nav{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
+.dcal-mtitle{flex:1;text-align:center;font-size:13px;font-weight:600;color:var(--text)}
+.dcal-arrow{background:var(--bg3);border:1px solid var(--border);color:var(--text2);width:26px;height:26px;border-radius:7px;cursor:pointer;font-size:15px;line-height:1;transition:all .12s}
+.dcal-arrow:hover{border-color:var(--teal);color:var(--teal)}
+.dcal-grids{display:flex;gap:20px}
+.dcal-grid{display:grid;grid-template-columns:repeat(7,30px);grid-auto-rows:30px;gap:1px}
+.dcal-dow{font-size:10px;color:var(--text3);text-align:center;display:flex;align-items:center;justify-content:center;font-weight:600}
+.dcal-day{display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--text2);border-radius:7px;cursor:pointer;transition:background .1s}
+.dcal-day:hover{background:var(--bg3)}
+.dcal-day.mut{color:var(--text3);opacity:.35;cursor:default}
+.dcal-day.mut:hover{background:none}
+.dcal-day.dis{color:var(--text3);opacity:.22;cursor:not-allowed;text-decoration:line-through}
+.dcal-day.dis:hover{background:none}
+.dcal-day.inrange{background:rgba(0,229,192,.13);border-radius:0}
+.dcal-day.edge{background:var(--teal);color:#04121a;font-weight:700}
+.dcal-day.edge.e-start{border-radius:7px 0 0 7px}
+.dcal-day.edge.e-end{border-radius:0 7px 7px 0}
+.dcal-day.edge.e-both{border-radius:7px}
+.dcal-note{font-size:10px;color:var(--text3);margin-top:10px;line-height:1.4}
+.dcal-foot{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-top:1px solid var(--border);background:rgba(0,0,0,.15)}
+.dcal-cmp{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text3);opacity:.5;cursor:not-allowed}
+.dcal-switch{width:28px;height:16px;border-radius:99px;background:var(--bg3);border:1px solid var(--border);position:relative;flex-shrink:0}
+.dcal-switch::after{content:"";position:absolute;left:2px;top:1px;width:12px;height:12px;border-radius:50%;background:var(--text3)}
+.dcal-bt{padding:7px 16px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid var(--border);transition:all .12s}
+.dcal-cancel{background:var(--bg3);color:var(--text2)}
+.dcal-cancel:hover{border-color:var(--text2);color:var(--text)}
+.dcal-apply{background:var(--teal);color:#04121a;border-color:var(--teal)}
+.dcal-apply:hover{filter:brightness(1.08)}
+</style>
 <header class="topbar">
   <div class="tb-ttl" id="tb-pg">Depósitos</div>
   <div class="tb-div"></div>
   <div class="tb-m" id="tb-m"></div>
   <div class="tb-rt">
-    <div style="display:flex;align-items:center;gap:5px;flex-shrink:0">
-      <span style="font-size:10px;color:var(--text3);white-space:nowrap">De</span>
-      <select class="sel" id="g-dia-de" onchange="applyF()" style="min-width:80px">
-        <option value="">01/06</option>
-        <option value="2">02/06</option>
-        <option value="3">03/06</option>
-        <option value="4">04/06</option>
-        <option value="5">05/06</option>
-        <option value="6">06/06</option>
-        <option value="7">07/06</option>
-        <option value="8">08/06</option>
-      </select>
-      <span style="font-size:10px;color:var(--text3)">até</span>
-      <select class="sel" id="g-dia-ate" onchange="applyF()" style="min-width:80px">
-        <option value="">08/06</option>
-        <option value="1">01/06</option>
-        <option value="2">02/06</option>
-        <option value="3">03/06</option>
-        <option value="4">04/06</option>
-        <option value="5">05/06</option>
-        <option value="6">06/06</option>
-        <option value="7">07/06</option>
-      </select>
-      <button onclick="document.getElementById('g-dia-de').value='';document.getElementById('g-dia-ate').value='';applyF()" style="background:var(--bg3);border:1px solid var(--border);color:var(--text3);width:22px;height:22px;border-radius:5px;cursor:pointer;font-size:11px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s" title="Limpar período" onmouseover="this.style.borderColor='var(--teal)';this.style.color='var(--teal)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text3)'">×</button>
+    <div class="dcal-wrap" id="dcal-wrap">
+      <!-- selects legados ocultos: gDia()/updateDaySelects continuam usando-os (compat) -->
+      <select id="g-dia-de" style="display:none"></select>
+      <select id="g-dia-ate" style="display:none"></select>
+      <button class="dcal-trigger" id="dcal-btn" onclick="dcalToggle(event)" title="Filtrar período">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;flex-shrink:0"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        <span id="dcal-label">Período</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;flex-shrink:0;opacity:.6"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="dcal-panel" id="dcal-panel" style="display:none">
+        <div class="dcal-body">
+          <div class="dcal-presets" id="dcal-presets"></div>
+          <div class="dcal-cals">
+            <div class="dcal-nav">
+              <button class="dcal-arrow" onclick="dcalNav(-1)" title="Anterior">‹</button>
+              <div class="dcal-mtitle" id="dcal-m1"></div>
+              <div class="dcal-mtitle" id="dcal-m2"></div>
+              <button class="dcal-arrow" onclick="dcalNav(1)" title="Próximo">›</button>
+            </div>
+            <div class="dcal-grids">
+              <div class="dcal-grid" id="dcal-grid1"></div>
+              <div class="dcal-grid" id="dcal-grid2"></div>
+            </div>
+            <div class="dcal-note" id="dcal-note"></div>
+          </div>
+        </div>
+        <div class="dcal-foot">
+          <div class="dcal-cmp" title="Em breve">
+            <span class="dcal-switch"></span><span>Comparar períodos</span>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="dcal-bt dcal-cancel" onclick="dcalClear()">Limpar</button>
+            <button class="dcal-bt dcal-cancel" onclick="dcalCancel()">Cancelar</button>
+            <button class="dcal-bt dcal-apply" onclick="dcalApply()">Aplicar</button>
+          </div>
+        </div>
+      </div>
     </div>
     <select class="sel" id="g-an" onchange="applyF()">
       <option value="">Todos os Analistas</option>
@@ -1213,9 +1267,17 @@ function gF(){
   return d;
 }
 function gDia(){
-  const de=document.getElementById('g-dia-de').value;
-  const ate=document.getElementById('g-dia-ate').value;
-  return {from: de?parseInt(de):null, to: ate?parseInt(ate):null};
+  // Fonte única = _dateRange (datas cheias). Deriva {from,to} em DIAS do mês atual (curMm),
+  // mantendo o contrato antigo para todos os consumidores. Intervalo fora do mês atual → vazio.
+  if(typeof _dateRange==='undefined'||!_dateRange||(!_dateRange.from&&!_dateRange.to)) return {from:null,to:null};
+  const cY=_calCurY(), md=_daysInMonth(cY,curMm);
+  const mStart=cY*10000+curMm*100+1, mEnd=cY*10000+curMm*100+md;
+  const f=_dateRange.from?_di(_dateRange.from):-Infinity;
+  const t=_dateRange.to?_di(_dateRange.to):Infinity;
+  const lo=Math.max(f,mStart), hi=Math.min(t,mEnd);
+  if(lo>hi) return {from:9999,to:-1}; // seleção não toca o mês atual → sem dados diários
+  const loD=lo%100, hiD=hi%100;
+  return {from: loD>1?loD:null, to: hiD<md?hiD:null};
 }
 function gDiaLabel(){
   const {from,to}=gDia();
@@ -1232,6 +1294,153 @@ function cliN(id){
   return`<div style="line-height:1.3"><div style="font-size:12px;font-weight:600;color:var(--text)">${nm}</div><div style="font-size:10px;color:var(--text3);font-family:'JetBrains Mono',monospace">${id}</div></div>`;
 }
 function cliNm(id){return CLI_NAMES[String(id)]||String(id);}
+
+/* ===== Calendário de período (dropdown) ===== */
+// _dateRange: intervalo APLICADO em datas cheias {from:{y,m,d}|null,to:{y,m,d}|null}.
+// Usado pelo Ranking (cross-mês). As telas do mês atual continuam via gDia() (selects ocultos).
+let _dateRange={from:null,to:null};
+let _calTemp={from:null,to:null};
+let _calViewY=2026,_calViewM=6,_calActivePreset='';
+const _DCAL_MN=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+const _DCAL_MNF=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+const _di=o=>o?o.y*10000+o.m*100+o.d:null;
+const _daysInMonth=(y,m)=>new Date(y,m,0).getDate();
+const _calCurY=()=>{const p=String(DD||'').split('/');const y=parseInt(p[2]);return isNaN(y)?2026:y;};
+const _dObj=dt=>({y:dt.getFullYear(),m:dt.getMonth()+1,d:dt.getDate()});
+const _calToday=()=>{const t=new Date();t.setHours(0,0,0,0);return t;};
+function _calBounds(){
+  const cY=_calCurY();let pm=curMm-1,py=cY;if(pm<1){pm=12;py--;}
+  const t=_dObj(_calToday());
+  return {fromInt:py*10000+pm*100+1, toInt:t.y*10000+t.m*100+t.d};
+}
+function dcalToggle(e){
+  if(e){e.stopPropagation();}
+  const p=document.getElementById('dcal-panel');
+  if(p.style.display==='none'){
+    _calTemp={from:_dateRange.from,to:_dateRange.to};
+    _calActivePreset='';
+    // vista inicial: mês anterior à esq., mês atual à dir. (foco onde há dados)
+    const cY=_calCurY();let vm=curMm-1,vy=cY;if(vm<1){vm=12;vy--;}
+    _calViewY=vy;_calViewM=vm;
+    dcalRender();p.style.display='block';
+    setTimeout(()=>document.addEventListener('click',_dcalOutside),0);
+  }else{ dcalClose(); }
+}
+function _dcalOutside(ev){ if(!document.getElementById('dcal-wrap').contains(ev.target)) dcalClose(); }
+function dcalClose(){ document.getElementById('dcal-panel').style.display='none'; document.removeEventListener('click',_dcalOutside); }
+function dcalNav(dir){
+  let m=_calViewM+dir,y=_calViewY;
+  if(m<1){m=12;y--;} if(m>12){m=1;y++;}
+  _calViewM=m;_calViewY=y;dcalRender();
+}
+function _dcalMonthGrid(y,m){
+  const b=_calBounds();
+  const dow=['D','S','T','Q','Q','S','S'];
+  let h='';
+  dow.forEach(d=>h+=`<div class="dcal-dow">${d}</div>`);
+  const first=new Date(y,m-1,1).getDay();
+  for(let i=0;i<first;i++)h+=`<div></div>`;
+  const nd=_daysInMonth(y,m);
+  const f=_di(_calTemp.from),t=_di(_calTemp.to);
+  for(let d=1;d<=nd;d++){
+    const v=y*10000+m*100+d;
+    const dis=v<b.fromInt||v>b.toInt;
+    let cls='dcal-day';
+    if(dis){cls+=' dis';}
+    else{
+      const isS=f!==null&&v===f, isE=t!==null&&v===t;
+      if((isS||isE)){cls+=' edge';if(f===t){cls+=' e-both';}else if(isS){cls+=' e-start';}else if(isE){cls+=' e-end';}}
+      else if(f!==null&&t!==null&&v>f&&v<t){cls+=' inrange';}
+    }
+    h+=`<div class="${cls}" ${dis?'':`onclick="dcalPick(${y},${m},${d})"`}>${d}</div>`;
+  }
+  return h;
+}
+function dcalRender(){
+  const nY=_calViewM===12?_calViewY+1:_calViewY, nM=_calViewM===12?1:_calViewM+1;
+  document.getElementById('dcal-m1').textContent=`${_DCAL_MNF[_calViewM-1]} ${_calViewY}`;
+  document.getElementById('dcal-m2').textContent=`${_DCAL_MNF[nM-1]} ${nY}`;
+  document.getElementById('dcal-grid1').innerHTML=_dcalMonthGrid(_calViewY,_calViewM);
+  document.getElementById('dcal-grid2').innerHTML=_dcalMonthGrid(nY,nM);
+  // presets
+  const P=[
+    ['DIÁRIOS','',null],
+    ['Hoje','hoje',null],['Ontem','ontem',null],
+    ['Últimos 7 dias','ult7',null],['Últimos 15 dias','ult15',null],['Últimos 30 dias','ult30',null],
+  ];
+  const cY=_calCurY();let pm=curMm-1,py=cY;if(pm<1){pm=12;py--;}
+  let ph='';
+  P.forEach(([lbl,key])=>{
+    if(key===''){ph+=`<div class="dcal-plabel">${lbl}</div>`;}
+    else ph+=`<button class="dcal-preset ${_calActivePreset===key?'on':''}" onclick="dcalPreset('${key}')">${lbl}</button>`;
+  });
+  ph+=`<div class="dcal-plabel">MENSAIS</div>`;
+  ph+=`<button class="dcal-preset ${_calActivePreset==='mes'+curMm?'on':''}" onclick="dcalPreset('mes${curMm}')">${_DCAL_MNF[curMm-1]}</button>`;
+  ph+=`<button class="dcal-preset ${_calActivePreset==='mes'+pm?'on':''}" onclick="dcalPreset('mes${pm}')">${_DCAL_MNF[pm-1]}</button>`;
+  document.getElementById('dcal-presets').innerHTML=ph;
+  document.getElementById('dcal-note').textContent='Depósitos/Saques têm detalhe diário só do mês atual; o Ranking usa o histórico completo dos contatos.';
+}
+function dcalPick(y,m,d){
+  _calActivePreset='';
+  const o={y,m,d};
+  if(_calTemp.from===null||_calTemp.to!==null){ _calTemp={from:o,to:null}; }
+  else { if(_di(o)<_di(_calTemp.from)) _calTemp={from:o,to:_calTemp.from}; else _calTemp.to=o; }
+  dcalRender();
+}
+function dcalPreset(key){
+  _calActivePreset=key;
+  const t=_calToday();const mk=dt=>_dObj(dt);
+  if(key==='hoje'){_calTemp={from:mk(t),to:mk(t)};}
+  else if(key==='ontem'){const y=new Date(t);y.setDate(y.getDate()-1);_calTemp={from:mk(y),to:mk(y)};}
+  else if(key==='ult7'||key==='ult15'||key==='ult30'){
+    const n=key==='ult7'?6:key==='ult15'?14:29;const s=new Date(t);s.setDate(s.getDate()-n);
+    _calTemp={from:mk(s),to:mk(t)};
+  } else if(key.slice(0,3)==='mes'){
+    const m=parseInt(key.slice(3));const cY=_calCurY();
+    const last=_daysInMonth(cY,m);const td=_dObj(t);
+    const endD=(m===td.m&&cY===td.y)?td.d:last;
+    _calTemp={from:{y:cY,m,d:1},to:{y:cY,m,d:endD}};
+  }
+  // ajusta a vista para mostrar o início do intervalo
+  if(_calTemp.from){_calViewY=_calTemp.from.y;_calViewM=_calTemp.from.m;}
+  dcalRender();
+}
+function _dcalFmt(o){return o?String(o.d).padStart(2,'0')+'/'+String(o.m).padStart(2,'0'):'';}
+function dcalUpdateLabel(){
+  const l=document.getElementById('dcal-label');
+  if(!_dateRange.from&&!_dateRange.to){l.textContent='Período';return;}
+  const a=_dcalFmt(_dateRange.from),b=_dcalFmt(_dateRange.to);
+  l.textContent=(a===b)?a:`${a} – ${b}`;
+}
+function _dcalSetLegacySelects(){
+  const de=document.getElementById('g-dia-de'),ate=document.getElementById('g-dia-ate');
+  if(!de||!ate)return;
+  if(!_dateRange.from&&!_dateRange.to){de.value='';ate.value='';return;}
+  const cY=_calCurY();
+  const monFrom=_dateRange.from?_di(_dateRange.from):-Infinity;
+  const monTo=_dateRange.to?_di(_dateRange.to):Infinity;
+  const md=_daysInMonth(cY,curMm);
+  const mStart=cY*10000+curMm*100+1, mEnd=cY*10000+curMm*100+md;
+  const lo=Math.max(monFrom,mStart), hi=Math.min(monTo,mEnd);
+  if(lo>hi){de.value='';ate.value='';return;} // intervalo não toca o mês atual
+  const loD=lo%100, hiD=hi%100;
+  de.value=loD===1?'':String(loD);
+  ate.value=hiD===md?'':String(hiD);
+}
+function dcalApply(){
+  let f=_calTemp.from,t=_calTemp.to;
+  if(f&&!t)t=f; if(t&&!f)f=t;
+  _dateRange={from:f||null,to:t||null};
+  _dcalSetLegacySelects();
+  dcalUpdateLabel();
+  dcalClose();
+  applyF();
+}
+function dcalCancel(){ dcalClose(); }
+function dcalClear(){
+  _dateRange={from:null,to:null};_calTemp={from:null,to:null};_calActivePreset='';
+  _dcalSetLegacySelects();dcalUpdateLabel();dcalRender();
+}
 function applyF(){
   // Garante que analistas não-admin nunca vejam dados de outros analistas
   try{
@@ -2479,8 +2688,8 @@ function importXL(ev){
       selAn.innerHTML='<option value="">Todos os Analistas</option>'+AL.map(a=>`<option>${a}</option>`).join('');
       updateDaySelects(maxDayNum, MM);
       // Limpa o filtro de período para mostrar todos os dias após o import
-      document.getElementById('g-dia-de').value='';
-      document.getElementById('g-dia-ate').value='';
+      _dateRange={from:null,to:null};
+      if(typeof dcalUpdateLabel==='function')dcalUpdateLabel();
 
       // APOIO: col A=ID, col B=Nome, col C=Responsável, col D=Classificação
       const wsApName=wb.SheetNames.find(n=>n.toLowerCase().includes('apoio'));
@@ -2898,21 +3107,17 @@ function renderChDayBars() {
 }
 
 function setChDay(d) {
-  const {from, to} = gDia();
-  if (from === d && to === d) {
-    document.getElementById('g-dia-de').value = '';
-    document.getElementById('g-dia-ate').value = '';
-  } else {
-    document.getElementById('g-dia-de').value = String(d);
-    document.getElementById('g-dia-ate').value = String(d);
-  }
+  const cY=_calCurY(), key=cY*10000+curMm*100+d;
+  const same=_dateRange.from&&_dateRange.to&&_di(_dateRange.from)===key&&_di(_dateRange.to)===key;
+  _dateRange=same?{from:null,to:null}:{from:{y:cY,m:curMm,d},to:{y:cY,m:curMm,d}};
+  dcalUpdateLabel();
   chPg = 1;
   applyF();
 }
 
 function clearChDay() {
-  document.getElementById('g-dia-de').value = '';
-  document.getElementById('g-dia-ate').value = '';
+  _dateRange={from:null,to:null};
+  dcalUpdateLabel();
   chPg = 1;
   applyF();
 }
@@ -3190,21 +3395,17 @@ function renderSKDayBars() {
 }
 
 function setSKDay(d) {
-  const {from, to} = gDia();
-  if (from === d && to === d) {
-    document.getElementById('g-dia-de').value = '';
-    document.getElementById('g-dia-ate').value = '';
-  } else {
-    document.getElementById('g-dia-de').value = String(d);
-    document.getElementById('g-dia-ate').value = String(d);
-  }
+  const cY=_calCurY(), key=cY*10000+curMm*100+d;
+  const same=_dateRange.from&&_dateRange.to&&_di(_dateRange.from)===key&&_di(_dateRange.to)===key;
+  _dateRange=same?{from:null,to:null}:{from:{y:cY,m:curMm,d},to:{y:cY,m:curMm,d}};
+  dcalUpdateLabel();
   skPg = 1;
   applyF();
 }
 
 function clearSKDay() {
-  document.getElementById('g-dia-de').value = '';
-  document.getElementById('g-dia-ate').value = '';
+  _dateRange={from:null,to:null};
+  dcalUpdateLabel();
   skPg = 1;
   applyF();
 }
@@ -4022,21 +4223,17 @@ function renderGPDayBars() {
 }
 
 function setGPDay(d) {
-  const {from, to} = gDia();
-  if (from === d && to === d) {
-    document.getElementById('g-dia-de').value = '';
-    document.getElementById('g-dia-ate').value = '';
-  } else {
-    document.getElementById('g-dia-de').value = String(d);
-    document.getElementById('g-dia-ate').value = String(d);
-  }
+  const cY=_calCurY(), key=cY*10000+curMm*100+d;
+  const same=_dateRange.from&&_dateRange.to&&_di(_dateRange.from)===key&&_di(_dateRange.to)===key;
+  _dateRange=same?{from:null,to:null}:{from:{y:cY,m:curMm,d},to:{y:cY,m:curMm,d}};
+  dcalUpdateLabel();
   gpPg = 1;
   applyF();
 }
 
 function clearGPDay() {
-  document.getElementById('g-dia-de').value = '';
-  document.getElementById('g-dia-ate').value = '';
+  _dateRange={from:null,to:null};
+  dcalUpdateLabel();
   gpPg = 1;
   applyF();
 }
@@ -5142,17 +5339,18 @@ function renderRanking() {
     if(!D[a].byDay[day]) D[a].byDay[day]={dep_2:0,dep_3:0,dep_3p:0,saq:0,ch:0,cb:0,tn:0,gp:0};
   };
 
-  // Filtro de PERÍODO do cabeçalho (g-dia-de/ate): conta só contatos no intervalo de
-  // dias do mês atual (curMm). Sem período selecionado, conta tudo (comportamento atual).
-  const {from:_dFrom, to:_dTo} = gDia();
+  // Filtro de PERÍODO do calendário: usa _dateRange (datas cheias) e compara dia+mês+ano,
+  // então atravessa meses corretamente (jun→jul). Sem período, conta tudo.
+  const _rFrom=(_dateRange&&_dateRange.from)?_di(_dateRange.from):null;
+  const _rTo=(_dateRange&&_dateRange.to)?_di(_dateRange.to):null;
   const _dateOk = (s) => {
-    if(_dFrom===null && _dTo===null) return true;
+    if(_rFrom===null && _rTo===null) return true;
     const p = String(s||'').split('/');
-    const day = parseInt(p[0]), mo = parseInt(p[1]);
-    if(isNaN(day)) return false;
-    if(!isNaN(mo) && mo !== curMm) return false;
-    if(_dFrom!==null && day<_dFrom) return false;
-    if(_dTo!==null && day>_dTo) return false;
+    const d=parseInt(p[0]), m=parseInt(p[1]), y=parseInt(p[2]);
+    if(isNaN(d)||isNaN(m)||isNaN(y)) return false;
+    const v=y*10000+m*100+d;
+    if(_rFrom!==null && v<_rFrom) return false;
+    if(_rTo!==null && v>_rTo) return false;
     return true;
   };
 
