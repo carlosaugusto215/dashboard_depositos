@@ -8,6 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -1266,6 +1267,14 @@ function gF(){
   }
   return d;
 }
+// ===== Compressão transparente do localStorage (LZString) =====
+// Guarda o histórico comprimido (~5-10x menor) p/ caber nos ~5MB do navegador SEM apagar nada.
+// Leitura de formato duplo: reconhece o marcador §LZ§ (novo, comprimido) OU JSON puro (antigo).
+function _lzC(s){ try{ return (window.LZString&&LZString.compressToUTF16)?('§LZ§'+LZString.compressToUTF16(s)):s; }catch(e){ return s; } }
+function _lzD(s){ try{ if(typeof s==='string'&&s.slice(0,4)==='§LZ§'){ return (window.LZString?LZString.decompressFromUTF16(s.slice(4)):null); } }catch(e){ return null; } return s; }
+function _lsGetC(key){ const v=localStorage.getItem(key); return v==null?null:_lzD(v); }
+function _lsSetC(key,jsonStr){ localStorage.setItem(key,_lzC(jsonStr)); }
+
 function gDia(){
   // Fonte única = _dateRange (datas cheias). Deriva {from,to} em DIAS do mês atual (curMm),
   // mantendo o contrato antigo para todos os consumidores. Intervalo fora do mês atual → vazio.
@@ -1646,7 +1655,7 @@ function toggleDepContato(clientId){
   if(cur.feito){
     if(!_isAdmin()){alert('Apenas o administrador pode desmarcar um contato.');return;}
     DEP_CONTACTS[String(clientId)]={feito:false,data:'',obs:''};
-    localStorage.setItem('dep_contacts',JSON.stringify(DEP_CONTACTS));
+    _lsSetC('dep_contacts',JSON.stringify(DEP_CONTACTS));
     renderDL();
     _writeDepToSheets(clientId,false,'','',null);
   }else{
@@ -1679,7 +1688,7 @@ function confirmDepContato(){
   const _now=new Date();
   const dataContato=_now.toLocaleDateString('pt-BR')+' '+_now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
   DEP_CONTACTS[String(_depModalClientId)]={feito:true,data:dataContato,obs};
-  localStorage.setItem('dep_contacts',JSON.stringify(DEP_CONTACTS));
+  _lsSetC('dep_contacts',JSON.stringify(DEP_CONTACTS));
   _writeDepToSheets(_depModalClientId,true,dataContato,obs,_depModalClient);
   closeDepModal();
   renderDL();
@@ -2271,10 +2280,11 @@ function saveSnap(maxDay, mm){
   // Grava com degradação graciosa: se estourar a cota, libera os acumuladores do MÊS
   // ANTERIOR (dado mais dispensável) e tenta de novo — assim o essencial sempre persiste.
   const _trySet=(key,json)=>{
-    try{ localStorage.setItem(key,json); return true; }
+    const packed=_lzC(json);
+    try{ localStorage.setItem(key,packed); return true; }
     catch(e){
       try{ ['prev_deps','prev_sk','prev_cb','prev_ch'].forEach(k=>localStorage.removeItem('dep_acc_'+k)); }catch(_){}
-      try{ localStorage.setItem(key,json); return true; }
+      try{ localStorage.setItem(key,packed); return true; }
       catch(e2){
         console.error('[SNAP] '+key+' não coube mesmo após liberar acumulado:',e2.message);
         const st=document.getElementById('imp-st');
@@ -2293,7 +2303,7 @@ function saveSnap(maxDay, mm){
 
 function loadSnap(){
   try{
-    const raw=localStorage.getItem('dep_snap');
+    const raw=_lsGetC('dep_snap');
     if(!raw)return false;
     const s=JSON.parse(raw);
     CL=(s.CL||[]).map(c=>c.analista==='Priscila Borges de Oliveira'?{...c,analista:'Ananda Soares'}:c);YC=s.YC;CB=s.CB;CH=s.CH||[];TN=s.TN;
@@ -2316,7 +2326,7 @@ function loadSnap(){
     curMm=s.mm||6;
     // SK: carrega de dep_snap_sk (chave dedicada) ou legado (s.SK), mescla sobre hardcoded
     try{
-      const skRaw=localStorage.getItem('dep_snap_sk');
+      const skRaw=_lsGetC('dep_snap_sk');
       const skSnap=skRaw?JSON.parse(skRaw):null;
       const skArr=(skSnap&&skSnap.SK&&skSnap.SK.length>0)?skSnap.SK:(s.SK&&s.SK.length>0?s.SK:null);
       if(skArr){const smm=(skSnap?skSnap.mm:s.mm)||6;const snapSkKeys=new Set(skArr.map(sk=>sk.external_id+'|'+sk.dia+'|'+(sk.mes||smm)));SK=[...SK.filter(sk=>!snapSkKeys.has(sk.external_id+'|'+sk.dia+'|'+(sk.mes||smm))),...skArr];}
@@ -2495,13 +2505,13 @@ function importXL(ev){
       const newDias=new Set(rows.filter(r=>r.date.getMonth()+1===MM&&r.date.getFullYear()===MY).map(r=>r.date.getDate()));
 
       // Acumula depósitos do mês atual
-      const savedDeps=JSON.parse(localStorage.getItem('dep_acc_deps')||'[]');
+      const savedDeps=JSON.parse(_lsGetC('dep_acc_deps')||'[]');
       const freshDeps=[...savedDeps.filter(r=>!newDias.has(r.dia)),...rows.filter(r=>r.date.getMonth()+1===MM&&r.date.getFullYear()===MY).map(r=>({id:r.id,ms:r.date.getTime(),dia:r.date.getDate(),val:r.val,resp:r.resp}))];
-      try{localStorage.setItem('dep_acc_deps',JSON.stringify(freshDeps));}catch(e){}
+      try{_lsSetC('dep_acc_deps',JSON.stringify(freshDeps));}catch(e){}
 
       // allRowsCur = mês atual acumulado; allRowsPrev = mês anterior (mantido do período anterior)
       const allRowsCur=freshDeps.map(r=>({id:r.id,date:new Date(r.ms),val:r.val,resp:r.resp}));
-      const prevDepsRaw=JSON.parse(localStorage.getItem('dep_acc_prev_deps')||'[]');
+      const prevDepsRaw=JSON.parse(_lsGetC('dep_acc_prev_deps')||'[]');
       const allRowsPrev=prevDepsRaw.map(r=>({id:r.id,date:new Date(r.ms),val:r.val,resp:r.resp}));
 
       const rC=allRowsCur.filter(r=>r.date>=new Date(MY,MM-1,1)&&r.date<today);
@@ -2621,7 +2631,7 @@ function importXL(ev){
             const newSkRaw=Object.values(skMapNew);
             newSkRaw.forEach(s=>{if(s.analista==='Priscila Borges de Oliveira')s.analista='Ananda Soares';});
             const skNewDias=new Set(newSkRaw.map(s=>s.dia+'|'+s.mes));
-            const savedSkRawStr=localStorage.getItem('dep_acc_sk');
+            const savedSkRawStr=_lsGetC('dep_acc_sk');
             let savedSkRaw=savedSkRawStr?JSON.parse(savedSkRawStr):[];
             // Sempre complementa com SK hardcoded para entradas ausentes no localStorage (preserva meses anteriores)
             if(typeof SK!=='undefined'&&SK.length>0){
@@ -2629,7 +2639,7 @@ function importXL(ev){
               SK.forEach(s=>{const key=s.external_id+'|'+s.dia+'|'+(s.mes||MM);const dk=s.dia+'|'+(s.mes||MM);if(!savedKeys.has(key)&&!skNewDias.has(dk)){savedSkRaw.push({external_id:s.external_id,dia:s.dia,mes:s.mes||MM,analista:s.analista,valor:s.valor,count_saque:s.count_saque||1,dep_dia:s.dep_dia||0});}});
             }
             const allSkRaw=[...savedSkRaw.filter(s=>!skNewDias.has(s.dia+'|'+(s.mes||MM))),...newSkRaw];
-            try{localStorage.setItem('dep_acc_sk',JSON.stringify(allSkRaw));}catch(e){}
+            try{_lsSetC('dep_acc_sk',JSON.stringify(allSkRaw));}catch(e){}
             SK=allSkRaw.map(s=>{const dep=newDias.has(s.dia)?(depByIdDay[s.external_id]?.[s.dia]||0):(s.dep_dia||0);
               return{...s,valor:Math.round(s.valor*100)/100,dep_dia:Math.round(dep*100)/100,date:String(s.dia).padStart(2,'0')+'/'+String(s.mes).padStart(2,'0')+'/'+MY,destaque:s.valor>50000,dep_maior:dep>s.valor};});
             // SK_MENSAL: total de saques por mês
@@ -2666,12 +2676,12 @@ function importXL(ev){
           if(chCli&&chTkt&&chMot&&chDia&&chGer){
             const newCH=rawCh.map(r=>({cliente_id:String(r[chCli]||'').trim(),ticket_id:String(r[chTkt]||'').trim(),motivo:String(r[chMot]||'').trim(),submotivo:chSub?String(r[chSub]||'').trim():'',dia:parseInt(r[chDia]),gerente:String(r[chGer]||'').trim()})).filter(r=>r.cliente_id&&r.ticket_id&&!isNaN(r.dia));
             const newTkts=new Set(newCH.map(r=>r.ticket_id));
-            const savedChStr=localStorage.getItem('dep_acc_ch');
+            const savedChStr=_lsGetC('dep_acc_ch');
             let savedCh=savedChStr?JSON.parse(savedChStr):[];
             // Mescla tickets históricos hardcoded que estejam faltando no acumulado
             if(CH_INIT.length>0){const existingTkts=new Set(savedCh.map(r=>r.ticket_id));const missingHist=CH_INIT.filter(r=>!existingTkts.has(r.ticket_id)&&!newTkts.has(r.ticket_id));savedCh=[...savedCh,...missingHist];}
             const allCH=[...savedCh.filter(r=>!newTkts.has(r.ticket_id)),...newCH];
-            try{localStorage.setItem('dep_acc_ch',JSON.stringify(allCH));}catch(e){}
+            try{_lsSetC('dep_acc_ch',JSON.stringify(allCH));}catch(e){}
             CH=allCH;}}}
 
       // TN: substituição total apenas se a aba existir no arquivo — sem aba, mantém dados anteriores
@@ -4584,7 +4594,7 @@ function _syncDepContactsFromSheets(sheetsData) {
     }
   });
   if (changed) {
-    localStorage.setItem('dep_contacts', JSON.stringify(DEP_CONTACTS));
+    _lsSetC('dep_contacts', JSON.stringify(DEP_CONTACTS));
     renderDL();
   }
 }
@@ -5310,7 +5320,7 @@ function _buildIndGrandesPerdas(){
 
 function renderRanking() {
   // Recarrega contatos do localStorage com guards contra null/invalid
-  try{const d=localStorage.getItem('dep_contacts');const p=d?JSON.parse(d):null;if(p&&typeof p==='object'&&!Array.isArray(p))DEP_CONTACTS=p;}catch(e){}
+  try{const d=_lsGetC('dep_contacts');const p=d?JSON.parse(d):null;if(p&&typeof p==='object'&&!Array.isArray(p))DEP_CONTACTS=p;}catch(e){}
   try{const c=localStorage.getItem('contacts_v2');const p=c?JSON.parse(c):null;if(p&&typeof p==='object'&&!Array.isArray(p))CONTACTS=p;}catch(e){}
   try{const h=localStorage.getItem('ch_contacts');const p=h?JSON.parse(h):null;if(p&&typeof p==='object'&&!Array.isArray(p))CH_CONTACTS=p;}catch(e){}
   // Garante que as variáveis são sempre objetos válidos
@@ -5725,8 +5735,8 @@ function _renameAnalista(oldName, newName) {
   Object.values(CONTACTS||{}).forEach(sec=>Object.values(sec).forEach(ct=>{if(ct.analista===oldName)ct.analista=newName;}));
   Object.values(DEP_CONTACTS||{}).forEach(dc=>{if(dc.analista===oldName)dc.analista=newName;});
   _saveContacts();
-  try{localStorage.setItem('dep_contacts',JSON.stringify(DEP_CONTACTS));}catch(e){}
-  try{localStorage.setItem('dep_acc_ch',JSON.stringify(CH));}catch(e){}
+  try{_lsSetC('dep_contacts',JSON.stringify(DEP_CONTACTS));}catch(e){}
+  try{_lsSetC('dep_acc_ch',JSON.stringify(CH));}catch(e){}
   saveSnap(JD,curMm);
   try{localStorage.setItem('dep_snap_cbt',JSON.stringify({CB,TN,mm:curMm,maxDay:JD}));}catch(e){}
   const selAn=document.getElementById('g-an');
@@ -5742,7 +5752,7 @@ function _indClearDates() {
 }
 
 try{const _cn=localStorage.getItem('dep_cli_names');if(_cn)CLI_NAMES=JSON.parse(_cn);}catch(e){}
-try{const _dc=localStorage.getItem('dep_contacts');if(_dc)DEP_CONTACTS=JSON.parse(_dc);}catch(e){}
+try{const _dc=_lsGetC('dep_contacts');if(_dc)DEP_CONTACTS=JSON.parse(_dc);}catch(e){}
 try{const _cv=localStorage.getItem('contacts_v2');if(_cv)CONTACTS=JSON.parse(_cv);}catch(e){}
 try{const _ca=localStorage.getItem('dep_carteira');if(_ca)CARTEIRA=JSON.parse(_ca);}catch(e){}
 try{const _cc=localStorage.getItem('ch_contacts');if(_cc)CH_CONTACTS=JSON.parse(_cc);}catch(e){}
