@@ -2373,8 +2373,9 @@ function loadSnap(){
     if(s.SK_MENSAL)Object.assign(SK_MENSAL,s.SK_MENSAL);
     const selAn=document.getElementById('g-an');
     selAn.innerHTML='<option value="">Todos os Analistas</option>'+AL.map(a=>`<option>${a}</option>`).join('');
-    // Usa o maior dia entre o snap e o CH mesclado (garante que dias hardcoded > snap aparecem)
-    const _chMax = CH.length > 0 ? Math.max(...CH.map(t => t.dia || 1)) : 1;
+    // Usa o maior dia entre o snap e o CH do mês corrente (evita dias de outro mês, ex.: seed de junho, inflarem o seletor)
+    const _chMesCur = _chDoMes(s.mm);
+    const _chMax = _chMesCur.length > 0 ? Math.max(..._chMesCur.map(t => t.dia || 1)) : 1;
     JD = Math.max(s.maxDay || 1, s.JD || 1, _chMax);
     updateDaySelects(JD, s.mm);
     // Fallback: se o snap principal tiver CB/TN desatualizados, prefere o fallback dedicado (gravado por último)
@@ -2570,6 +2571,16 @@ function importXL(ev){
         if(typeof CL!=='undefined')CL.forEach(c=>{const p=c.ultimo_dep.split('/');accCliM[c.external_id]={resp:c.analista,seedVal:Math.round(c.total_jun*100)/100,seedMs:new Date(parseInt(p[2]),parseInt(p[1])-1,parseInt(p[0])).getTime(),days:{}};});
         if(typeof YC!=='undefined')YC.forEach(c=>{if(!accCliM[c.external_id])accCliM[c.external_id]={resp:c.analista,seedVal:Math.round((c.total_dia||0)*100)/100,seedMs:new Date(MY,MM-1,maxDayNum-1).getTime(),days:{}};});
       }
+      // CARRYOVER "sem depositar": garante que quem depositou no mês ANTERIOR continue sendo acompanhado
+      // neste mês (com a data do último depósito), mesmo após a virada de mês. Sem isso, ao importar só o
+      // dia 01 de um novo mês a lista "sem depositar" some — a base vinha só do YC do dia (que o import
+      // reduz aos depositantes do dia). Merge idempotente: só ADICIONA quem ainda não está no accCliM.
+      try{
+        const _prevDeps=JSON.parse(_lsGetC('dep_acc_prev_deps')||'[]');
+        const _lastPrev={};
+        _prevDeps.forEach(r=>{if(!_lastPrev[r.id]||r.ms>_lastPrev[r.id].ms)_lastPrev[r.id]={ms:r.ms,resp:r.resp};});
+        Object.entries(_lastPrev).forEach(([id,v])=>{if(!accCliM[id])accCliM[id]={resp:(v.resp==='Priscila Borges de Oliveira'?'Ananda Soares':v.resp),seedVal:0,seedMs:v.ms,days:{}};});
+      }catch(e){}
       // Remove dias do arquivo novo e re-adiciona do raw (evita duplicata no re-import)
       newDias.forEach(d=>{Object.values(accCliM).forEach(v=>{delete v.days[String(d)];});});
       rC.filter(r=>newDias.has(r.date.getDate())).forEach(r=>{const d=String(r.date.getDate());if(!accCliM[r.id])accCliM[r.id]={resp:r.resp,seedVal:0,seedMs:0,days:{}};accCliM[r.id].days[d]=(accCliM[r.id].days[d]||0)+r.val;});
@@ -2712,7 +2723,7 @@ function importXL(ev){
         if(rawCh.length){const ks=Object.keys(rawCh[0]);
           const[chCli,chTkt,chMot,chSub,chDia,chGer]=[fPri(ks,'id externa','solicitante','external','cliente'),fPri(ks,'id do ticket','ticket'),fPri(ks,'motivo'),fPri(ks,'submotivo','sub motivo','sub-motivo'),fPri(ks,'dia','day'),fPri(ks,'gerente','responsav','analista')];
           if(chCli&&chTkt&&chMot&&chDia&&chGer){
-            const newCH=rawCh.map(r=>({cliente_id:String(r[chCli]||'').trim(),ticket_id:String(r[chTkt]||'').trim(),motivo:String(r[chMot]||'').trim(),submotivo:chSub?String(r[chSub]||'').trim():'',dia:parseInt(r[chDia]),gerente:String(r[chGer]||'').trim()})).filter(r=>r.cliente_id&&r.ticket_id&&!isNaN(r.dia));
+            const newCH=rawCh.map(r=>({cliente_id:String(r[chCli]||'').trim(),ticket_id:String(r[chTkt]||'').trim(),motivo:String(r[chMot]||'').trim(),submotivo:chSub?String(r[chSub]||'').trim():'',dia:parseInt(r[chDia]),mm:MM,gerente:String(r[chGer]||'').trim()})).filter(r=>r.cliente_id&&r.ticket_id&&!isNaN(r.dia));
             const newTkts=new Set(newCH.map(r=>r.ticket_id));
             const savedChStr=_lsGetC('dep_acc_ch');
             let savedCh=savedChStr?JSON.parse(savedChStr):[];
@@ -2808,10 +2819,20 @@ let _depModalClient = null;
 
 const CH_COLORS = ['#2563eb','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899','#84cc16','#f97316','#6366f1','#14b8a6','#a855f7'];
 
+// Mês (1-12) de um chamado. Importados carregam .mm (número); o seed hardcoded usa .mes ("junho").
+// Sem carimbo → null (assumido como mês corrente na exibição, p/ não esconder o que foi importado).
+function _chMesNum(r){
+  if(typeof r.mm==='number') return r.mm;
+  if(r.mes){ const i=_MESES_PT.indexOf(String(r.mes).toLowerCase()); if(i>=0) return i+1; }
+  return null;
+}
+// Chamados só do mês carregado (curMm) — esconde seed/histórico de outros meses (ex.: junho vazando em julho).
+function _chDoMes(mm){ const m=mm||curMm; return CH.filter(r=>{const rm=_chMesNum(r); return rm===null||rm===m;}); }
+
 function getCHFiltered() {
   const a = document.getElementById('g-an').value;
   const {from, to} = gDia();
-  let d = CH;
+  let d = _chDoMes();
   if (a) d = d.filter(c => c.gerente === a);
   if (from !== null) d = d.filter(c => c.dia >= from);
   if (to   !== null) d = d.filter(c => c.dia <= to);
@@ -3064,7 +3085,7 @@ function _writeContactToSheets(section, id, feito, dataContato, obs){
 function renderChContatoKPI() {
   const el = document.getElementById('ch-contato-kpi');
   if (!el) return;
-  const all = CH;
+  const all = _chDoMes();
   const byGer = {};
   all.forEach(c => {
     if (!byGer[c.gerente]) byGer[c.gerente] = {total:0, feito:0};
@@ -3130,7 +3151,7 @@ function renderChKPIs() {
 
 function renderChDayBars() {
   const a = document.getElementById('g-an').value;
-  const all = a ? CH.filter(c => c.gerente === a) : CH;
+  const all = a ? _chDoMes().filter(c => c.gerente === a) : _chDoMes();
   const byDay = {};
   all.forEach(c => { byDay[c.dia] = (byDay[c.dia] || 0) + 1; });
   const days = Object.keys(byDay).map(Number).sort((x,y) => x-y);
