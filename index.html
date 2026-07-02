@@ -5457,14 +5457,16 @@ function renderRanking() {
   // Parse "DD/MM/YYYY HH:MM" → day number para tabela por dia
   const parseDay = s => { if(!s) return null; const d=parseInt((s||'').split('/')[0]); return isNaN(d)?null:d; };
 
+  // Normaliza analista: "Priscila Borges de Oliveira" foi renomeada p/ "Ananda Soares" — merge no ranking.
+  const _normAn = n => (n==='Priscila Borges de Oliveira') ? 'Ananda Soares' : n;
   // Coleta todos os gerentes das três fontes — mesma lógica do menu Indicadores
   const allAn = [...new Set([
-    ...(CL||[]).map(c=>c.analista),
-    ...(SK||[]).filter(r=>r.mes===curMm&&r.valor>=49000).map(r=>r.analista),
-    ...(CH||[]).map(c=>c.gerente),
-    ...(CB||[]).map(r=>r.analista),
-    ...(TN||[]).map(r=>r.analista),
-    ...(GP||[]).map(r=>r.analista)
+    ...(CL||[]).map(c=>_normAn(c.analista)),
+    ...(SK||[]).filter(r=>r.mes===curMm&&r.valor>=49000).map(r=>_normAn(r.analista)),
+    ...(CH||[]).map(c=>_normAn(c.gerente)),
+    ...(CB||[]).map(r=>_normAn(r.analista)),
+    ...(TN||[]).map(r=>_normAn(r.analista)),
+    ...(GP||[]).map(r=>_normAn(r.analista))
   ])].filter(Boolean).sort();
 
   const analistas = gerF ? [gerF] : allAn;
@@ -5473,19 +5475,31 @@ function renderRanking() {
   analistas.forEach(a => {
     D[a] = { dep:{'2 dias':0,'3 dias':0,'+3 dias':0}, saques:0, chamados:0, cashback:0, torneios:0, grandesperdas:0, byDay:{}, total:0 };
   });
+  // Alias: contatos gravados com o nome antigo (Priscila) apontam para o MESMO objeto da Ananda,
+  // então somam na conta dela sem virar uma linha separada (analistas já foi normalizado).
+  if(D['Ananda Soares']) D['Priscila Borges de Oliveira']=D['Ananda Soares'];
 
   const ensDay = (a, day) => {
     if(!D[a].byDay[day]) D[a].byDay[day]={dep_2:0,dep_3:0,dep_3p:0,saq:0,ch:0,cb:0,tn:0,gp:0};
   };
 
   // Filtro de PERÍODO do calendário: usa _dateRange (datas cheias) e compara dia+mês+ano,
-  // então atravessa meses corretamente (jun→jul). Sem período, conta tudo.
+  // então atravessa meses corretamente (jun→jul). SEM período no calendário, o padrão é o
+  // MÊS CARREGADO (curMm) — o ranking é mensal ("TOTAL MÊS" / "Nenhum contato no mês"); antes
+  // contava tudo e junho vazava em julho (o parseDay ignora o mês, misturando dias iguais).
   const _rFrom=(_dateRange&&_dateRange.from)?_di(_dateRange.from):null;
   const _rTo=(_dateRange&&_dateRange.to)?_di(_dateRange.to):null;
+  const _curDataY=parseInt(String(DD||'').split('/')[2])||null; // ano dos dados carregados
   const _dateOk = (s) => {
-    if(_rFrom===null && _rTo===null) return true;
     const p = String(s||'').split('/');
     const d=parseInt(p[0]), m=parseInt(p[1]), y=parseInt(p[2]);
+    if(_rFrom===null && _rTo===null){
+      // padrão = só o mês/ano carregado
+      if(isNaN(m)) return false;
+      if(m!==curMm) return false;
+      if(_curDataY!==null && !isNaN(y) && y!==_curDataY) return false;
+      return true;
+    }
     if(isNaN(d)||isNaN(m)||isNaN(y)) return false;
     const v=y*10000+m*100+d;
     if(_rFrom!==null && v<_rFrom) return false;
