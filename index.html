@@ -2271,20 +2271,27 @@ function updateDaySelects(maxDay, mm) {
 }
 
 function saveSnap(maxDay, mm){
-  try{
-    // Excluídos do snap: DEP_ANO (hardcoded), AN_DEP (hardcoded, rebuilt in loadSnap),
-    // GP/DEP_DIA/AJ/TJ (recalculados), CLI_NAMES/CARTEIRA (salvos separadamente),
-    // SK (salvo em dep_snap_sk para não estourar quota do snap principal).
-    const snap={CL,YC,CB,CH,TN,AN_NET,AM,MO,TM,AL,JD,DD,MO_MENSAL,SK_MENSAL,maxDay,mm};
-    const json=JSON.stringify(snap);
-    localStorage.setItem('dep_snap',json);
-  }catch(e){
-    console.error('[SNAP] Falha ao salvar:',e.message);
-    const st=document.getElementById('imp-st');
-    if(st){st.textContent='⚠ Não foi possível salvar os dados: '+e.message+' — publique antes de fechar.';st.className='imp-st er';}
-  }
-  // SK em chave dedicada — mantém dep_snap menor para não estourar os 5MB
-  try{localStorage.setItem('dep_snap_sk',JSON.stringify({SK,mm,maxDay}));}catch(e){console.warn('[SNAP] dep_snap_sk quota:',e.message);}
+  // Grava com degradação graciosa: se estourar a cota, libera os acumuladores do MÊS
+  // ANTERIOR (dado mais dispensável) e tenta de novo — assim o essencial sempre persiste.
+  const _trySet=(key,json)=>{
+    try{ localStorage.setItem(key,json); return true; }
+    catch(e){
+      try{ ['prev_deps','prev_sk','prev_cb','prev_ch'].forEach(k=>localStorage.removeItem('dep_acc_'+k)); }catch(_){}
+      try{ localStorage.setItem(key,json); return true; }
+      catch(e2){
+        console.error('[SNAP] '+key+' não coube mesmo após liberar acumulado:',e2.message);
+        const st=document.getElementById('imp-st');
+        if(st){st.textContent='⚠ Espaço do navegador cheio. Clique em "↺ limpar acumulado" e importe novamente.';st.className='imp-st er';}
+        return false;
+      }
+    }
+  };
+  // Excluídos do snap: DEP_ANO (hardcoded), AN_DEP (hardcoded, rebuilt in loadSnap),
+  // GP/DEP_DIA/AJ/TJ (recalculados), CLI_NAMES/CARTEIRA (salvos separadamente),
+  // SK (salvo em dep_snap_sk para não estourar quota do snap principal).
+  const snap={CL,YC,CB,CH,TN,AN_NET,AM,MO,TM,AL,JD,DD,MO_MENSAL,SK_MENSAL,maxDay,mm};
+  _trySet('dep_snap',JSON.stringify(snap));
+  _trySet('dep_snap_sk',JSON.stringify({SK,mm,maxDay}));
 }
 
 function loadSnap(){
@@ -2476,11 +2483,15 @@ function importXL(ev){
       if(localStorage.getItem('dep_acc_month')!==mKey){
         ['deps','sk','cb','ch'].forEach(k=>{
           const v=localStorage.getItem('dep_acc_'+k);
-          if(v)localStorage.setItem('dep_acc_prev_'+k,v);
+          // Libera o prev antigo ANTES de gravar (evita ter os dois na memória) e protege
+          // contra estouro de cota: se o mês anterior não couber, seguimos o import mesmo
+          // assim (o detalhe diário do mês anterior pode ficar indisponível, mas não trava).
+          localStorage.removeItem('dep_acc_prev_'+k);
+          if(v){ try{ localStorage.setItem('dep_acc_prev_'+k,v); }catch(e){ console.warn('[IMPORT] mês anterior "'+k+'" não coube na cota — ignorado:',e.message); } }
           localStorage.removeItem('dep_acc_'+k);
         });
         localStorage.removeItem('dep_acc_cliM');
-        localStorage.setItem('dep_acc_month',mKey);
+        try{localStorage.setItem('dep_acc_month',mKey);}catch(e){}
       }
 
       // Dias do arquivo novo → substitui esses dias no acumulado (evita duplicata no re-import)
