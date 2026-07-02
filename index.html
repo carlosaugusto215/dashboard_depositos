@@ -2829,14 +2829,16 @@ let _depModalClient = null;
 const CH_COLORS = ['#2563eb','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899','#84cc16','#f97316','#6366f1','#14b8a6','#a855f7'];
 
 // Mês (1-12) de um chamado. Importados carregam .mm (número); o seed hardcoded usa .mes ("junho").
-// Sem carimbo → null (assumido como mês corrente na exibição, p/ não esconder o que foi importado).
+// ATENÇÃO: o seed de junho tem 248 de 329 registros SEM o campo mes → não dá p/ assumir "corrente"
+// (senão junho vaza em julho). Sem carimbo confiável → null (tratado como NÃO-corrente na exibição).
 function _chMesNum(r){
   if(typeof r.mm==='number') return r.mm;
   if(r.mes){ const i=_MESES_PT.indexOf(String(r.mes).toLowerCase()); if(i>=0) return i+1; }
   return null;
 }
-// Chamados só do mês carregado (curMm) — esconde seed/histórico de outros meses (ex.: junho vazando em julho).
-function _chDoMes(mm){ const m=mm||curMm; return CH.filter(r=>{const rm=_chMesNum(r); return rm===null||rm===m;}); }
+// Chamados SÓ do mês carregado (curMm), estrito: registros sem mês conhecido ficam de fora — todo dado
+// real importado carrega .mm, então só o seed antigo/estraga fica null. Esconde junho vazando em julho.
+function _chDoMes(mm){ const m=mm||curMm; return CH.filter(r=>_chMesNum(r)===m); }
 
 function getCHFiltered() {
   const a = document.getElementById('g-an').value;
