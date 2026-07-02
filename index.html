@@ -1311,11 +1311,10 @@ const _dObj=dt=>({y:dt.getFullYear(),m:dt.getMonth()+1,d:dt.getDate()});
 // do PC — a dash opera em 2026 e o relógio da máquina pode divergir (isso travava o calendário).
 const _calRefDate=()=>{const p=String(DD||'').split('/');const d=parseInt(p[0])||1,m=parseInt(p[1])||curMm,y=parseInt(p[2])||_calCurY();return new Date(y,m-1,d);};
 function _calBounds(){
-  // Janela clicável independente do relógio: do mês anterior ao mês seguinte ao atual.
+  // Só o mês dos DADOS carregados (curMm) é clicável — garante que todo dia selecionável
+  // tem dado e o filtro sempre bate com a dash. Ao importar um novo mês, curMm avança.
   const cY=_calCurY();
-  let fm=curMm-1,fy=cY;if(fm<1){fm=12;fy--;}
-  let tm=curMm+1,ty=cY;if(tm>12){tm=1;ty++;}
-  return {fromInt:fy*10000+fm*100+1, toInt:ty*10000+tm*100+_daysInMonth(ty,tm)};
+  return {fromInt:cY*10000+curMm*100+1, toInt:cY*10000+curMm*100+_daysInMonth(cY,curMm)};
 }
 function dcalToggle(e){
   if(e){e.stopPropagation();}
@@ -1323,9 +1322,8 @@ function dcalToggle(e){
   if(p.style.display==='none'){
     _calTemp={from:_dateRange.from,to:_dateRange.to};
     _calActivePreset='';
-    // vista inicial: mês anterior à esq., mês atual à dir. (foco onde há dados)
-    const cY=_calCurY();let vm=curMm-1,vy=cY;if(vm<1){vm=12;vy--;}
-    _calViewY=vy;_calViewM=vm;
+    // vista inicial: o mês dos dados (curMm) à esquerda — único clicável.
+    _calViewY=_calCurY();_calViewM=curMm;
     dcalRender();p.style.display='block';
     setTimeout(()=>document.addEventListener('click',_dcalOutside),0);
   }else{ dcalClose(); }
@@ -1378,11 +1376,10 @@ function dcalRender(){
     if(key===''){ph+=`<div class="dcal-plabel">${lbl}</div>`;}
     else ph+=`<button class="dcal-preset ${_calActivePreset===key?'on':''}" onclick="dcalPreset('${key}')">${lbl}</button>`;
   });
-  ph+=`<div class="dcal-plabel">MENSAIS</div>`;
-  ph+=`<button class="dcal-preset ${_calActivePreset==='mes'+curMm?'on':''}" onclick="dcalPreset('mes${curMm}')">${_DCAL_MNF[curMm-1]}</button>`;
-  ph+=`<button class="dcal-preset ${_calActivePreset==='mes'+pm?'on':''}" onclick="dcalPreset('mes${pm}')">${_DCAL_MNF[pm-1]}</button>`;
+  ph+=`<div class="dcal-plabel">MÊS</div>`;
+  ph+=`<button class="dcal-preset ${_calActivePreset==='mes'+curMm?'on':''}" onclick="dcalPreset('mes${curMm}')">${_DCAL_MNF[curMm-1]} (mês todo)</button>`;
   document.getElementById('dcal-presets').innerHTML=ph;
-  document.getElementById('dcal-note').textContent='Depósitos/Saques têm detalhe diário só do mês atual; o Ranking usa o histórico completo dos contatos.';
+  document.getElementById('dcal-note').textContent='O filtro atua sobre o mês carregado ('+_DCAL_MNF[curMm-1]+'). Ao importar um novo mês, o calendário avança para ele.';
 }
 function dcalPick(y,m,d){
   _calActivePreset='';
