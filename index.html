@@ -1167,21 +1167,32 @@ tr:last-child td{border-bottom:none}
 <script>
 // ── AUTH ──────────────────────────────────────────────────────────────────────
 const USERS={
-  admin:    {pass:'U6u;^wT%g5u.(o0FwV_^',role:'admin',   name:'Admin'},
-  gustavo:  {pass:'khgfyl^5L7Gp*27UGPgG', role:'analyst', name:'Gustavo Silva'},
-  kauan:    {pass:'22yV)r;szsSpB=Pi&_!v', role:'analyst', name:'Kauan'},
-  kianny:   {pass:'u8DLD//e7,X^nqf=FQYF', role:'analyst', name:'Kianny Negri'},
-  luiz:     {pass:'2t-U&kH*jE&(I)oFbF-W', role:'analyst', name:'Luiz Santos'},
-  maria:    {pass:'HkhB/8OBU$e7k8V#q$Q<', role:'analyst', name:'Maria Rodrigues'},
-  anandasoares: {pass:'iM5fVmGI:3OLT+th3ZU)', role:'analyst', name:'Ananda Soares'},
+  admin:{h:'d1171b3cfa8b6ee79e3ce6a5f58e152e35d3e8956e19cae73978dd3514424486',s:'a31a39c50c8fb55ebf4748fda6518ee6',role:'admin',name:"Admin"},
+  gustavo:{h:'dcc9e6eb425d5c18cd4b8fcb21d21f11b012c2fa4b1a716f71aeb2d800662c16',s:'56a2fa68d26133b5f96973e898cf6390',role:'analyst',name:"Gustavo Silva"},
+  kauan:{h:'8694001ae41455ab86f8fb45e49a701f75a42f34716b7607337430f0afcea296',s:'b59741a9705b51dcda7c46210f4661f1',role:'analyst',name:"Kauan"},
+  kianny:{h:'0d9e39c5cff3aa35b23a54c1d4a20113f748ed96106db956eb4a11ab6266b046',s:'e73afcc3cd9d7f6007edd38ba218fd09',role:'analyst',name:"Kianny Negri"},
+  luiz:{h:'245ad99196308c32fee4ce08d43670c9bd5f6e8e57f00373994c565bfd995012',s:'7f327e1e06ad60f4bab7ff1aaaf35058',role:'analyst',name:"Luiz Santos"},
+  maria:{h:'12cfa9349fe89cf72cd32ef17c4598710ae3f8fd9cbf4c5058dac637f1ea743a',s:'a47b71e2643193acfef274a711c2cea2',role:'analyst',name:"Maria Rodrigues"},
+  anandasoares:{h:'4a640751d66f887d4ee67fdac66905ed01f9dfa39320815ad8887d15a32c336d',s:'4f1d8bf1d35902141b9d279fd4f95c1d',role:'analyst',name:"Ananda Soares"},
 };
 
-function doLogin(e){
+// Deriva PBKDF2-SHA256 (150k iterações) → hex. Nenhuma senha em texto puro fica no código-fonte;
+// o USERS guarda só {h:hash, s:salt}. Requer contexto seguro (HTTPS) — o site roda em HTTPS.
+async function _pbkdf2Hex(pass, saltHex){
+  const enc=new TextEncoder();
+  const salt=Uint8Array.from(saltHex.match(/../g).map(b=>parseInt(b,16)));
+  const key=await crypto.subtle.importKey('raw',enc.encode(pass),{name:'PBKDF2'},false,['deriveBits']);
+  const bits=await crypto.subtle.deriveBits({name:'PBKDF2',salt,iterations:150000,hash:'SHA-256'},key,256);
+  return [...new Uint8Array(bits)].map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+async function doLogin(e){
   e.preventDefault();
   const u=document.getElementById('l-usr').value.trim().toLowerCase();
   const p=document.getElementById('l-pwd').value;
   const usr=USERS[u];
-  if(!usr||usr.pass!==p){
+  let ok=false;
+  if(usr&&usr.s&&usr.h){ try{ ok=(await _pbkdf2Hex(p,usr.s))===usr.h; }catch(err){ ok=false; } }
+  if(!ok){
     document.getElementById('l-err').textContent='Usuário ou senha incorretos.';
     return;
   }
