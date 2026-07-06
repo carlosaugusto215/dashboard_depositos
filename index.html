@@ -500,9 +500,8 @@ tr:last-child td{border-bottom:none}
     </div>
     <div class="cw" style="height:230px"><canvas id="c-mv"></canvas></div>
   </div>
-</div>
 
-  <!-- Depósito total por dia -->
+  <!-- Depósito total por dia (dentro do overview: antes ficava órfão fora das .pg e aparecia em TODA página) -->
   <div class="card" style="margin-top:16px">
     <div class="ch">
       <div><div class="ct">Depósito total por dia — Junho 2026</div><div class="cs">Soma de todos os depósitos · barra mais alta destacada</div></div>
@@ -517,8 +516,14 @@ tr:last-child td{border-bottom:none}
 
 </div>
 
-<!-- ATIVOS ONTEM -->
+<!-- PARARAM DE DEPOSITAR -->
 <div class="pg" id="pg-ativos">
+  <div class="card" style="margin-bottom:16px">
+    <div class="ch">
+      <div><div class="ct">Pararam de depositar — por gerente</div><div class="cs">Clientes ativos no penúltimo dia sem depósito no último</div></div>
+    </div>
+    <div class="cw" style="height:240px"><canvas id="c-ativos-ger"></canvas></div>
+  </div>
   <div class="kg" id="yest-kpis"></div>
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
     <div id="yest-pills" class="pr" style="margin-bottom:0"></div>
@@ -1535,6 +1540,28 @@ function _computeYCD(depRows){
   return Object.entries(d2).filter(([id])=>!actD1.has(id)).map(([id,v])=>({external_id:id,analista:(v.analista==='Priscila Borges de Oliveira'?'Ananda Soares':v.analista),classificacao:clsOf[id]||'VIP',total_dia:Math.round(v.total_dia*100)/100,qtd_dep:v.qtd_dep,ltv:Math.round((ltvOf[id]||0)*100)/100,dia_ref:dPrev}));
 }
 
+// Gráfico "Pararam de depositar — por gerente": conta clientes do YCD por analista.
+function renderYCDChart(){
+  const gc=document.getElementById('c-ativos-ger');
+  if(!gc||typeof Chart==='undefined') return;
+  const a=document.getElementById('g-an').value;
+  const data=a?YCD.filter(c=>c.analista===a):YCD;
+  const byAn={};
+  data.forEach(c=>{const an=c.analista||'—';byAn[an]=(byAn[an]||0)+1;});
+  const entries=Object.entries(byAn).sort((x,y)=>y[1]-x[1]);
+  if(gc._c)gc._c.destroy();
+  gc._c=new Chart(gc,{type:'bar',data:{
+    labels:entries.map(e=>e[0].split(' ')[0]),
+    datasets:[{label:'Pararam de depositar',data:entries.map(e=>e[1]),backgroundColor:'#2563eb',hoverBackgroundColor:'#3b82f6',borderRadius:4,borderSkipped:false}]
+  },options:{responsive:true,maintainAspectRatio:false,
+    onClick:(_,e)=>{if(!e.length)return;const an=entries[e[0].index][0];const sel=document.getElementById('g-an');if(sel){sel.value=an;applyF();}},
+    plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+c.parsed.y+' cliente'+(c.parsed.y===1?'':'s')}}},
+    scales:{
+      x:{ticks:{color:'#7c8fa8',font:{size:11,weight:'500'}},grid:{color:'rgba(255,255,255,.04)'}},
+      y:{beginAtZero:true,ticks:{color:'#7c8fa8',font:{size:11},precision:0,stepSize:1},grid:{color:'rgba(255,255,255,.04)'}}
+    }}});
+}
+
 function renderYKPIs(){
   const a=document.getElementById('g-an').value;
   let data=a?YCD.filter(c=>c.analista===a):YCD;
@@ -1551,6 +1578,8 @@ function renderYKPIs(){
     <div class="kc gn"><div class="kl">Depositado em ${_d2Label}</div><div class="kv" style="color:var(--may)">${f(total)}</div><div class="kf">no dia anterior ao último</div></div>
     <div class="kc am"><div class="kl">Top analista</div><div class="kv" style="color:#fbbf24;font-size:16px;font-weight:600">${topAn?topAn[0].split(' ')[0]:'—'}</div><div class="kf">${topAn?f(topAn[1]):''}</div></div>
     <div class="kc rd"><div class="kl">Clientes VIP</div><div class="kv" style="color:#f87171">${vip}</div><div class="kf">${data.length-vip} padrão/outros</div></div>`;
+
+  renderYCDChart();
 
   // Pills for analyst filter
   const analysts=[''].concat([...new Set(YCD.map(c=>c.analista))].sort());
