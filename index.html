@@ -2430,7 +2430,7 @@ function loadSnap(){
     }catch(e){}
     // GP: recalcula do SK do mês atual apenas
     const ltvM={};if(CL&&CL.length>0)CL.forEach(c=>{ltvM[String(c.external_id)]=c.ltv||0;});
-    GP=SK.filter(sk=>(sk.mes||curMm)===curMm).map(sk=>({external_id:sk.external_id,dia:sk.dia,dep:sk.dep_dia,saque:sk.valor,net:Math.round((sk.dep_dia-sk.valor)*100)/100,analista:sk.analista,ltv:Math.round((ltvM[sk.external_id]||0)*100)/100})).sort((a,b)=>a.net-b.net);
+    GP=_gpBuild(SK.filter(sk=>(sk.mes||curMm)===curMm), ltvM, 'dep_acc_deps');
     // MO_MENSAL e SK_MENSAL: snap atualiza meses presentes, hardcoded preserva meses ausentes (Jan-Mai)
     if(s.MO_MENSAL)Object.assign(MO_MENSAL,s.MO_MENSAL);
     if(s.SK_MENSAL)Object.assign(SK_MENSAL,s.SK_MENSAL);
@@ -2821,7 +2821,7 @@ function importXL(ev){
 
       // GP: join SK × dep — apenas mês atual
       curMm=MM;
-      GP=SK.filter(sk=>(sk.mes||MM)===MM).map(sk=>({external_id:sk.external_id,dia:sk.dia,dep:sk.dep_dia,saque:sk.valor,net:Math.round((sk.dep_dia-sk.valor)*100)/100,analista:sk.analista,ltv:Math.round((ltvM[sk.external_id]||0)*100)/100})).sort((a,b)=>a.net-b.net);
+      GP=_gpBuild(SK.filter(sk=>(sk.mes||MM)===MM), ltvM, 'dep_acc_deps');
 
       // AN_NET: dep − saque por analista por dia
       const nAN_NET={};
@@ -4287,6 +4287,30 @@ function renderTNAnBar() {
 /* ── GRANDES PERDAS ─────────────────────── */
 let gpDay = null, gpPg = 1, gpFilter = 'all';
 const GP_PS = 20;
+
+// Monta GP com full outer join saques × depósitos → 1 linha por cliente|dia.
+// Antes GP saía só do SK (saques), então quem SÓ depositou (grandes ganhos) não aparecia.
+// depsKey = chave dos depósitos do mês no localStorage (formato {id,ms,dia,val,resp}).
+function _gpBuild(skRows, ltvMap, depsKey){
+  const byIdDay={}, anById={};
+  try{
+    JSON.parse(_lsGetC(depsKey)||'[]').forEach(r=>{
+      const id=String(r.id), d=new Date(r.ms).getDate();
+      if(!byIdDay[id])byIdDay[id]={};
+      byIdDay[id][d]=(byIdDay[id][d]||0)+r.val;
+      anById[id]=(r.resp==='Priscila Borges de Oliveira'?'Ananda Soares':r.resp);
+    });
+  }catch(e){}
+  const rows=skRows.map(sk=>({external_id:sk.external_id,dia:sk.dia,dep:sk.dep_dia||0,saque:sk.valor,net:Math.round(((sk.dep_dia||0)-sk.valor)*100)/100,analista:sk.analista,ltv:Math.round((ltvMap[sk.external_id]||0)*100)/100}));
+  const seen=new Set(rows.map(r=>r.external_id+'|'+r.dia));
+  Object.entries(byIdDay).forEach(([id,days])=>Object.entries(days).forEach(([d,dep])=>{
+    const dia=parseInt(d);
+    if(dep>0 && !seen.has(id+'|'+dia)){
+      rows.push({external_id:id,dia,dep:Math.round(dep*100)/100,saque:0,net:Math.round(dep*100)/100,analista:anById[id]||'—',ltv:Math.round((ltvMap[id]||0)*100)/100});
+    }
+  }));
+  return rows.sort((a,b)=>a.net-b.net);
+}
 
 function getGPFiltered() {
   const a = document.getElementById('g-an').value;
