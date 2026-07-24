@@ -2557,7 +2557,7 @@ function importXL(ev){
         st.className='imp-st er';return;
       }
       const fd=d=>String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();
-      const rows=raw.map(r=>{
+      const rawRows=raw.map(r=>{
         let date=null;
         if(hasDiaCols){
           const dia=parseInt(r[cDia]),ano=parseInt(r[cAno]),mes=parseInt(r[cMes]);
@@ -2570,7 +2570,11 @@ function importXL(ev){
           else{date=new Date(rv);}
         }
         return{id:String(r[cId]||'').trim(),date,val:parseFloat(String(r[cV]||'0').replace(',','.')),resp:String(r[cR]||'').trim(),excl:cE?parseFloat(r[cE]||0):0};
-      }).filter(r=>r.id&&r.date&&!isNaN(r.date.getTime())&&!isNaN(r.val)&&r.excl!=1);
+      });
+      const _rowOk=r=>r.id&&r.date&&!isNaN(r.date.getTime())&&!isNaN(r.val);
+      const _dropBad=rawRows.filter(r=>!_rowOk(r));                 // id/data/valor inválidos → ignorados
+      const _dropExcl=rawRows.filter(r=>_rowOk(r)&&r.excl==1);      // marcados como excluídos
+      const rows=rawRows.filter(r=>_rowOk(r)&&r.excl!=1);
       if(!rows.length){st.textContent='Nenhum dado válido!';st.className='imp-st er';return;}
 
       // D-1 definido pelo arquivo importado
@@ -2581,6 +2585,26 @@ function importXL(ev){
       const yest=new Date(MY,MM-1,maxDayNum);
       const today=new Date(MY,MM-1,maxDayNum+1);
       const PM=MM===1?12:MM-1,PY=MM===1?MY-1:MY;
+
+      // DIAGNÓSTICO de import: total líquido do mês vs. o que foi descartado. Ajuda a bater com
+      // relatórios externos e a caçar diferenças (ex.: 14,48M no dashboard vs 14,52M no relatório).
+      try{
+        const _cur=r=>r.date&&r.date.getFullYear()===MY&&r.date.getMonth()+1===MM&&r.date.getDate()<=maxDayNum;
+        const _sum=arr=>arr.reduce((s,r)=>s+(isNaN(r.val)?0:r.val),0);
+        const _porMes={};
+        rows.forEach(r=>{const k=r.date.getFullYear()+'-'+String(r.date.getMonth()+1).padStart(2,'0');_porMes[k]=(_porMes[k]||0)+r.val;});
+        window._impDiag={
+          arquivo:file&&file.name, linhas_no_arquivo:raw.length,
+          mes_corrente:MY+'-'+String(MM).padStart(2,'0'), ate_dia:maxDayNum,
+          coluna_valor:cV, coluna_analista:cR, tem_coluna_excluido:!!cE,
+          total_liquido_mes:Math.round(_sum(rows.filter(_cur))),
+          excluidos_mes_valor:Math.round(_sum(_dropExcl.filter(_cur))), excluidos_mes_qtd:_dropExcl.filter(_cur).length,
+          linhas_ignoradas_qtd:_dropBad.length,
+          por_mes:Object.fromEntries(Object.entries(_porMes).map(([k,v])=>[k,Math.round(v)]))
+        };
+        console.log('%c[IMPORT] Diagnóstico de totais','font-weight:bold;color:#2563eb',window._impDiag);
+        if(_dropBad.length)console.warn('[IMPORT] '+_dropBad.length+' linha(s) ignorada(s) por id/data/valor inválido:',_dropBad.slice(0,20));
+      }catch(e){console.warn('[IMPORT] diagnóstico falhou',e);}
 
       // === ACUMULAÇÃO EM localStorage ===
       const mKey=MY+'-'+MM;
@@ -2862,7 +2886,11 @@ function importXL(ev){
       applyF();
       const diasAcc=new Set(Object.values(nAN_DEP).flatMap(days=>Object.keys(days))).size||[...new Set(freshDeps.map(r=>r.dia))].length;
       const nNomes=Object.keys(CLI_NAMES).length;
-      st.textContent='✓ '+newCL.length+' clientes · '+SK.length+' saques · '+CB.length+' cashbacks · '+CH.length+' chamados · '+diasAcc+' dias acum. · '+nNomes+' nomes · Dados: '+DD+cbStatusMsg;
+      let _diagMsg='';
+      try{const D=window._impDiag;if(D){_diagMsg=' · líquido '+D.mes_corrente+': '+f(D.total_liquido_mes)
+        +(D.excluidos_mes_valor>0?' · excluídos: '+f(D.excluidos_mes_valor)+' ('+D.excluidos_mes_qtd+')':'')
+        +(D.linhas_ignoradas_qtd>0?' · ⚠ '+D.linhas_ignoradas_qtd+' linha(s) ignorada(s)':'');}}catch(e){}
+      st.textContent='✓ '+newCL.length+' clientes · '+SK.length+' saques · '+CB.length+' cashbacks · '+CH.length+' chamados · '+diasAcc+' dias acum. · '+nNomes+' nomes · Dados: '+DD+cbStatusMsg+_diagMsg;
       st.className='imp-st ok';
       // Salva após a mensagem de sucesso — erro de quota fica visível se ocorrer
       saveSnap(maxDayNum, MM);
